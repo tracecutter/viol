@@ -1,0 +1,30 @@
+{# Add rst-badge after rst-versions for small badge style. #}
+  <div class="rst-versions" data-toggle="rst-versions" role="note" aria-label="versions">
+    <span class="rst-current-version" data-toggle="rst-current-version">
+      <span class="fa fa-book"> Downloads</span>
+      v: {{ release }}
+      <span class="fa fa-caret-down"></span>
+    </span>
+    <div class="rst-other-versions">
+      <dl>
+        <dt>Versions</dt>
+        {% for slug, url in versions %}
+          <dd><a href="{{ url }}">{{ slug }}</a></dd>
+        {% endfor %}
+      </dl>
+      <dl>
+        <dt>Downloads</dt>
+        <dd><a href="{{ invx_pub_root }}downloads/pdf/{{ release }}/invx.pdf">PDF</a></dd>
+        <dd><a href="{{ invx_pub_root }}downloads/html/{{ release }}/invx.html.tar.gz">HTML</a></dd>
+        <dd><a href="{{ invx_pub_root }}downloads/epub/{{ release }}/invx.epub">EPub</a></dd>
+        <dd><a href="{{ invx_pub_root }}downloads/src/{{ release }}/invx.tar.gz">Source</a></dd>
+      </dl>
+      <dl>
+        <dt>Repositories</dt>
+          <dd>
+            <a href="{{ invx_git_root }}">git</a>
+          </dd>
+      </dl>
+      <hr/>
+    </div>
+  </div>

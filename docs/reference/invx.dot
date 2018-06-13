@@ -1,0 +1,30 @@
+
+digraph 
+	{
+	graph [rankdir=LR];
+	node [shape=box3d font="courier" fontsize=10 width=1 height=0.25 style="filled" fillcolor="dodgerblue" fixedsize=true];
+	invx [label="invx"];
+	info [label="info"];
+	audit [label="audit"];
+	build [label="build"];
+	lint [label="lint"];
+	docgen [label="docgen"];
+	testgen [label="testgen"];
+
+	node [shape=folder font="courier" fontsize=10 height=0.25 width=1.0 height=.25 style="filled" fillcolor="moccasin" fixedsize=true];
+	docset [label="docs"];
+	testset [label="tests"];
+
+	node [shape=none style="" fillcolor="" width=0 height=0 label=""]
+	edge[dir=none]
+
+	invx -> info;
+	invx -> audit;
+	invx -> build;
+	invx -> lint;
+	invx -> docgen;
+	invx -> testgen;
+
+	docgen -> docset;
+	testgen -> testset;
+	}

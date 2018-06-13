@@ -1,0 +1,13 @@
+
+digraph 
+	{
+	graph [rankdir=LR];
+	node [shape=box3d font="courier" fontsize=10 width=1 height=0.25 style="filled" fillcolor="dodgerblue" fixedsize=true];
+	invx [label="invx"];
+	info [label="info"];
+
+	node [shape=none style="" fillcolor="" width=0 height=0 label=""]
+	edge[dir=none]
+
+	invx -> info;
+	}

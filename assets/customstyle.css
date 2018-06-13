@@ -1,0 +1,78 @@
+/*
+ * customsytle.css
+ * ~~~~~~~~~~~~~~~
+ *
+ * Sphinx stylesheet -- invx customizations.
+ *
+ * :copyright: Copyright (c) 2018 Bit Harmony Ltd.. All rights reserved. See AUTHORS.
+ * :license: PROPRIETARY, see LICENSE for details.
+ *
+ */
+
+/* -- admonitions ----------------------------------------------------------- */
+
+
+.rst-content .admonition-title
+{
+  color: #fff;
+  font-weight: bold;
+  display: block;
+  color: #fff;
+  background: #287fb9;
+  margin: -12px;
+  padding: 6px 12px;
+  margin-bottom: 12px;
+}
+
+.rst-content .admonition-title:before
+{
+  content: "\f013";
+  -webkit-animation: fa-spin 2s infinite linear;
+  animation: fa-spin 2s infinite linear;
+}
+
+/* Add this if one wants alternating row highlighting
+
+div.atfwrequirement tr.row-odd {
+    margin: 0px 100px 5px 0px;
+    font-weight: bold;
+	background-color:rgb(240,140,240);
+}
+
+
+/* -- tables ---------------------------------------------------------------- */
+/*
+table.docutils {
+    border: 0;
+    border-collapse: collapse;
+}
+
+table.docutils td, table.docutils th {
+    padding: 1px 8px 1px 5px;
+    border-top: 0;
+    border-left: 0;
+    border-right: 0;
+    border-bottom: 1px solid #aaa;
+}
+
+table.field-list td, table.field-list th {
+    border: 0 !important;
+}
+
+table.footnote td, table.footnote th {
+    border: 0 !important;
+}
+
+th {
+    text-align: left;
+    padding-right: 5px;
+}
+
+table.citation {
+    border-left: solid 1px gray;
+    margin-left: 1px;
+}
+
+table.citation td {
+    border-bottom: none;
+}

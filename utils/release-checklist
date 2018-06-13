@@ -1,0 +1,26 @@
+Release checklist
+=================
+
+* Update version info in VERSION.rst
+* Update release info in HISTORY.rst
+* make check/reindent
+* make lint
+* make test
+* make dist
+* check integrity of downloads
+	- invx.epub
+	- invx.html.tar.gz
+	- invx.pdf
+	- invx.tar.gz (--exclude .git / --exclude .svn)
+* make clean
+* make RELEASE="x.x.x" release
+* make RELEASE="latest" release-pub
+* make RELEASE="devel" release-pub
+* Check git status/git add/git commit
+* git add -u
+* git add <new files/dirs>
+* git commit -m "Release x.x.x"
+* git tag 'vx.x.x'
+* git push origin master
+* git push --tags
+* send notification mail

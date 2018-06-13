@@ -1,0 +1,46 @@
+digraph 
+	{
+	splines=ortho;
+	concentrate=true;
+	graph [rankdir=LR];
+
+	node [shape=folder font="courier" fontsize=10 width=1.0 height=.25 style="filled" fillcolor="moccasin" fixedsize=true];
+	invx [label="invx"];
+	commands [label="commands"];
+	listers [label="listers"];
+	utils [label="utils"];
+	resources [label="resources"];
+
+	node [shape=note width=1.5 style="filled" fillcolor="moccasin" fixedsize=true];
+	doc [label="doc.py"];
+	help [label="help.py"];
+	list [label="list.py"];
+	show [label="show.py"];
+
+	node [shape=none style="" fillcolor="" width=0 height=0 label=""];
+
+	edge[dir=none];
+
+	invx -> commands [len=1 weight=100];
+	       commands -> doc [len=1 weight=100];
+	       commands -> help;
+	       commands -> show;
+	       commands -> list;
+	invx -> listers;
+	       listers -> listers_init [len=1 weight=100];
+	       listers -> prj;
+	       listers -> lister_base;
+	invx -> utils;
+	       utils -> utils_init [len=1 weight=100];
+	       utils -> cli;
+	       utils -> cli_args;
+	       utils -> cli_opt_files;
+	       utils -> cli_options;
+	       utils -> cli_parser;
+	       utils -> compat;
+	       utils -> eval_cpp;
+	       utils -> log;
+	       utils -> terminal_size;
+	       utils -> util;
+	       utils -> util_str;
+	}

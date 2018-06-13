@@ -1,0 +1,32 @@
+digraph 
+	{
+	splines=ortho;
+	concentrate=true;
+	graph [rankdir=LR];
+
+	node [shape=folder font="courier" fontsize=10 width=1.0 height=.25 style="filled" fillcolor="moccasin" fixedsize=true];
+	invx [label="invx"];
+	commands [label="commands"];
+	utils [label="utils"];
+
+	node [shape=note width=1.5 style="filled" fillcolor="moccasin" fixedsize=true];
+	help [label="help.py"];
+
+	edge[dir=none];
+
+	invx -> commands [len=1 weight=100];
+	       commands -> help;
+	invx -> utils;
+	       utils -> utils_init [len=1 weight=100];
+	       utils -> cli;
+	       utils -> cli_args;
+	       utils -> cli_opt_files;
+	       utils -> cli_options;
+	       utils -> cli_parser;
+	       utils -> compat;
+	       utils -> eval_cpp;
+	       utils -> log;
+	       utils -> terminal_size;
+	       utils -> util;
+	       utils -> util_str;
+	}

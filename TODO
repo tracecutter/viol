@@ -1,0 +1,103 @@
+Names
+	Lexicon
+		x - trans/crossplatform/execute
+		i - inventory
+		fs - filesystem
+		ms - management system
+		cs - control
+		p - platform/product
+		s - simple
+		w - web
+		inv - inventory
+	Result
+		invx - inventory execute
+		ifsx - inventory filesystem execute
+		xims - crossplatform inventory management system
+		sics - simple inventory control systems
+invx
+	ident - gather identification information on item
+		[directory]
+			recurse to all items in direcotry and scrape from web all useful info
+		[UPC/EAN]
+	price - gather pricing information on item
+		[directory]
+		[UPC/EAN]
+	list - prepare, but don't publish, a listing
+		[UPC/EAN]
+	unlist - unlist and return to stock (unpublish if published)
+		[UPC/EAN]
+	publish - publish a listing
+		[UPC/EAN]
+	unpublish - unpublish a listing
+		[UPC/EAN]
+	sold - move item to sold items
+		[UPC/EAN]
+	ship - move item to shipped items
+		[UPC/EAN]
+	return - clean up item and return to stock
+		[UPC/EAN]
+	admin
+		backup label - label the current inventory (using git)
+		restore label - retore a labled inventory (using git)
+		status
+
+inventory structure
+	stock
+		category
+			UPC_xxx
+				info.csv
+				image[n].jpg
+				price_history.csv
+			UPC_xxx
+				info.csv
+				image[n].jpg
+				price_history.csv
+			EAN_xxx
+				info.csv
+				image[n].jpg
+				price_history.csv
+			EAN_xxx
+				info.csv
+				image[n].jpg
+				price_history.csv
+	listing
+		category
+			ebay
+				UPC_xxx
+					ebay.csv
+					info.csv
+					image[n].jpg
+					price_history.csv
+			amazon
+				UPC_xxx
+					amazon.csv
+					info.csv
+					image[n].jpg
+					price_history.csv
+			facebook
+				UPC_xxx
+					facebook.csv
+					info.csv
+					image[n].jpg
+					price_history.csv
+	bounght
+		category
+			UPC_xxx
+				buyer.csv
+				info.csv
+				image[n].jpg
+	shipped
+		category
+			UPC_xxx
+				buyer.csv
+				shipment.csv
+				info.csv
+				image[n].jpg
+	returned
+		category
+			UPC_xxx
+				buyer.csv
+				shipment.csv
+				info.csv
+				image[n].jpg
+
