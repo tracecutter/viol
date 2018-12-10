@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# invx documentation build configuration file
+# viol documentation build configuration file
 #
 # This file is execfile()d with the current directory set to its
 # containing dir.
@@ -14,7 +14,7 @@
 import sys
 import os
 
-# invx uses the ReadTheDocs style Sphinx theme
+# viol uses the ReadTheDocs style Sphinx theme
 import sphinx_rtd_theme
 
 # If extensions (or modules to document with autodoc) are in another
@@ -28,8 +28,8 @@ cwd = os.getcwd()
 project_root = os.path.dirname(cwd)
 
 # Define path the project repos
-invx_git_root = 'https://github.com/tracecutter/invx'
-invx_pub_root = 'https://somewhereovertherainbox/invx/'
+viol_git_root = 'https://github.com/tracecutter/viol'
+viol_pub_root = 'https://somewhereovertherainbox/viol/'
 
 
 # Insert the project root dir as the first element in the PYTHONPATH.
@@ -37,7 +37,7 @@ invx_pub_root = 'https://somewhereovertherainbox/invx/'
 # version is used.
 sys.path.insert(0, project_root)
 
-import invx
+import viol
 
 # -- General configuration ---------------------------------------------
 
@@ -45,7 +45,7 @@ import invx
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom ones.
 extensions = ['sphinx.ext.autodoc', 'sphinx.ext.autosummary', 'sphinx.ext.extlinks',
-              'sphinx.ext.viewcode', 'sphinx.ext.graphviz', 'docs.invx_ext']
+              'sphinx.ext.viewcode', 'sphinx.ext.graphviz', 'docs.viol_ext']
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['./sphinx_bh_theme']
@@ -60,7 +60,7 @@ source_suffix = '.rst'
 master_doc = 'index'
 
 # General information about the project.
-project = 'invx'
+project = 'viol'
 copyright = '2018, Bit Harmony Ltd.'
 
 # The version info for the project you're documenting, acts as replacement for
@@ -80,15 +80,15 @@ except IOError:
     version = release = 'dev'
     versions = [version]
 
-ver_hist_list = [('latest', invx_pub_root + 'docs/latest/index.html'),
-                 ('devel', invx_pub_root + 'docs/devel/index.html')]
+ver_hist_list = [('latest', viol_pub_root + 'docs/latest/index.html'),
+                 ('devel', viol_pub_root + 'docs/devel/index.html')]
 
 for ver_hist in versions:
-    ver_hist_list.append((ver_hist, invx_pub_root + 'docs/' + ver_hist + '/index.html'))
+    ver_hist_list.append((ver_hist, viol_pub_root + 'docs/' + ver_hist + '/index.html'))
 
 html_context = {}
-html_context['invx_git_root'] = invx_git_root
-html_context['invx_pub_root'] = invx_pub_root
+html_context['viol_git_root'] = viol_git_root
+html_context['viol_pub_root'] = viol_pub_root
 html_context['versions']            = ver_hist_list
 
 
@@ -138,7 +138,7 @@ extlinks = {
     'sphinx': ('http://sphinx-doc.org/latest/%s', 'Sphinx: '),
     'restref': ('http://docutils.sourceforge.net/docs/ref/rst/%s', 'ReST Référence: '),
     'issue': ('https://github.com/TryGhost/Ghost/issues/new?title=Bug', '#'),
-    'pull': ('https://github.com/yourname/invx/pulls', 'PR #')
+    'pull': ('https://github.com/yourname/viol/pulls', 'PR #')
 }
 
 
@@ -257,9 +257,9 @@ latex_elements = {
 # (source start file, target name, title, author, documentclass
 # [howto/manual]).
 latex_documents = [
-    ('index', 'invx.tex',
-     ur'EDF to XLSX',
-     ur'invx Resource Allocator',
+    ('index', 'viol.tex',
+     ur'Viol Design',
+     ur'viol Resource Allocator',
      'manual'),
 ]
 
@@ -289,9 +289,9 @@ latex_show_urls = 'inline'
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    ('index', 'invx',
-     u'EDF to XLSX Documentation',
-     ['invx Resource Allocator'], 1)
+    ('index', 'viol',
+     u'Viol Design Documentation',
+     ['viol Resource Allocator'], 1)
 ]
 
 # If true, show URL addresses after external links.
@@ -304,10 +304,10 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-    ('index', 'invx',
-     u'EDF to XLSX Documentation',
-     'invx',
-     'invx resource allocator.',
+    ('index', 'viol',
+     u'Viol Design Documentation',
+     'viol',
+     'viol resource allocator.',
      'Recommendation'),
 ]
 
@@ -340,7 +340,7 @@ texinfo_documents = [
 # regardless of the global pdf_compressed setting.
 
 pdf_documents = [
-    ('index', u'invx', u'EDF to XLSX Documentation', u'invx Resource Allocator'),
+    ('index', u'viol', u'Viol Design Documentation', u'viol Resource Allocator'),
 ]
 
 # A comma-separated list of custom stylesheets. Example:

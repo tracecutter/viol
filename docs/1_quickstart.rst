@@ -1,7 +1,7 @@
 Quickstart
 ==========
 
-First, :doc:`Install invx <2_installation>`.
+First, :doc:`Install viol <2_installation>`.
 
 Options brief and quiet control program output
 
@@ -12,16 +12,16 @@ Turn on a light to 20%:
 
 ::
 
-  $ invx on <id> 20
+  $ viol on <id> 20
     [...]
 
 Get help:
 
 ::
 
-  $ invx help
+  $ viol help
     [usage information]
 
-  $ invx help on
+  $ viol help on
     [sub-command usage information]
 

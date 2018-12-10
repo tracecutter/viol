@@ -3,9 +3,9 @@
 Platform Prerequisites
 ======================
 
-invx works on Windows, Unix/Linux, and Mac OS X.
+viol works on Windows, Unix/Linux, and Mac OS X.
 
-invx requires Python and works on versions 2.6 or later, and 3.x.  However, for better compatibility
+viol requires Python and works on versions 2.6 or later, and 3.x.  However, for better compatibility
 with other python tools, CPython version 2.7 is preferred.
 
 .. toctree::

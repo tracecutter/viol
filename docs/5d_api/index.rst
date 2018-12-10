@@ -7,9 +7,9 @@ API Reference
     :maxdepth: 2
 
     overview
-    invx
-    invx.commands
-    invx.utils
+    viol
+    viol.commands
+    viol.utils
 
 Index
 -----

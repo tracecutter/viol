@@ -1,8 +1,8 @@
 ====
-invx
+viol
 ====
 
-.. image:: ../assets/invx.png
+.. image:: ../assets/viol.png
    :height: 128px
    :width: 128 px
    :scale: 100 %
@@ -13,12 +13,12 @@ invx
 
 About
 -----
-invx is a python package that converts EDF filex to Excel XSLX
+viol is a python package for drafting violins, violas, and cellos
 
 Design Documentation
 ====================
 
-Current documentation for invx is found at (<https://somewherovertherainbow.com/invx>)
+Current documentation for viol is found at (<https://somewherovertherainbow.com/viol>)
 
 User Requirements
 -----------------
@@ -31,9 +31,9 @@ User Installation
 
 - Install Python 2.7 (http://python.org/download)
 - Install pip (http://pypi.python.org/pypi/pip)
-- Install invx (https://sites.google.com/a/bitharmony.com/devops/packages/invx)::
+- Install viol (https://sites.google.com/a/bitharmony.com/devops/packages/viol)::
 
-   $ pip install <local package directory> invx
+   $ pip install <local package directory> viol
 
 Build Documentation
 -------------------

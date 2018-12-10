@@ -5,7 +5,7 @@ digraph
 	graph [rankdir=LR];
 
 	node [shape=folder font="courier" fontsize=10 width=1.0 height=.25 style="filled" fillcolor="moccasin" fixedsize=true];
-	invx [label="invx"];
+	viol [label="viol"];
 	commands [label="commands"];
 	utils [label="utils"];
 
@@ -14,9 +14,9 @@ digraph
 
 	edge[dir=none];
 
-	invx -> commands [len=1 weight=100];
+	viol -> commands [len=1 weight=100];
 	       commands -> help;
-	invx -> utils;
+	viol -> utils;
 	       utils -> utils_init [len=1 weight=100];
 	       utils -> cli;
 	       utils -> cli_args;

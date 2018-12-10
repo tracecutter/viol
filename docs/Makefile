@@ -56,10 +56,10 @@ help:
 	@echo "  doctest    to run all doctests embedded in the documentation (if enabled)"
 
 clean:
-	rm -rf $(BUILDDIR) $(API_DIR)/invx.* $(API_DIR)/modules.rst
+	rm -rf $(BUILDDIR) $(API_DIR)/viol.* $(API_DIR)/modules.rst
 
 api:
-	$(SPHINX_API_BUILD) -f -d 2 -T -o 5d_api ../invx
+	$(SPHINX_API_BUILD) -f -d 2 -T -o 5d_api ../viol
 
 html: api
 	$(SPHINXBUILD) -b html $(ALLSPHINXOPTS) $(BUILDDIR)/html

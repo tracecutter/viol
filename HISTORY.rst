@@ -1,4 +1,4 @@
 Revision History
 ++++++++++++++++
 
-* 0.1.0 (2018-03-06) - First Release
+* 0.1.0 (2018-12-08) - First Release

@@ -13,9 +13,9 @@ This is the introduction.
 Commands
 --------
 
-.. _config_invx:
+.. _config_viol:
 
-Configuring invx
+Configuring viol
 ----------------
 
 .. _config-file:
@@ -23,14 +23,14 @@ Configuring invx
 Config file
 ^^^^^^^^^^^
 
-invx allows you to set all command line option defaults in a standard ini style config file.
+viol allows you to set all command line option defaults in a standard ini style config file.
 
 The names and locations of the configuration files vary slightly across platforms.
 
-* On Unix and Mac OS X the configuration file is: :file:`$HOME/.invx/invx.conf`
-* On Windows, the configuration file is: :file:`%HOME%\\invx\\invx.ini`
+* On Unix and Mac OS X the configuration file is: :file:`$HOME/.viol/viol.conf`
+* On Windows, the configuration file is: :file:`%HOME%\\viol\\viol.ini`
 
-You can set a custom path location for the config file using the environment variable ``INVX_CONFIG_FILE``.
+You can set a custom path location for the config file using the environment variable ``VIOL_CONFIG_FILE``.
 
 The names of the settings are derived from the long command line option, e.g.
 if you want to use a different package index (``--index-url``) and set the
@@ -84,26 +84,26 @@ Appending options like ``--find-links`` can be written on multiple lines:
 Environment Variables
 ^^^^^^^^^^^^^^^^^^^^^
 
-invx's command line options can be set with environment variables using the
-format ``INVX_<UPPER_LONG_NAME>`` . Dashes (``-``) have to be replaced with
+viol's command line options can be set with environment variables using the
+format ``VIOL_<UPPER_LONG_NAME>`` . Dashes (``-``) have to be replaced with
 underscores (``_``).
 
 For example, to set the default timeout::
 
-    export INVX_DEFAULT_TIMEOUT=60
+    export VIOL_DEFAULT_TIMEOUT=60
 
-This is the same as passing the option to invx directly::
+This is the same as passing the option to viol directly::
 
-    invx --default-timeout=60 [...]
+    viol --default-timeout=60 [...]
 
 To set options that can be set multiple times on the command line, just add
 spaces in between values. For example::
 
-    export INVX_FIND_LINKS="http://mirror1.example.com http://mirror2.example.com"
+    export VIOL_FIND_LINKS="http://mirror1.example.com http://mirror2.example.com"
 
 is the same as calling::
 
-    invx install --find-links=http://mirror1.example.com --find-links=http://mirror2.example.com
+    viol install --find-links=http://mirror1.example.com --find-links=http://mirror2.example.com
 
 
 Config Precedence
@@ -115,8 +115,8 @@ Within the config file, command specific sections have precedence over the globa
 
 Examples:
 
-- ``--host=foo`` overrides ``INVX_HOST=foo``
-- ``INVX_HOST=foo`` overrides a config file with ``[global] host = foo``
+- ``--host=foo`` overrides ``VIOL_HOST=foo``
+- ``VIOL_HOST=foo`` overrides a config file with ``[global] host = foo``
 - A command specific section in the config file ``[<command>] host = bar``
   overrides the option with same name in the ``[global]`` config file section
 
@@ -124,17 +124,17 @@ Examples:
 Command Completion
 ------------------
 
-invx comes with support for command line completion in bash and zsh.
+viol comes with support for command line completion in bash and zsh.
 
 To setup for bash::
 
-    $ invx completion --bash >> ~/.profile
+    $ viol completion --bash >> ~/.profile
 
 To setup for zsh::
 
-    $ invx completion --zsh >> ~/.zprofile
+    $ viol completion --zsh >> ~/.zprofile
 
 Alternatively, you can use the result of the ``completion`` command
 directly with the eval function of you shell, e.g. by adding the following to your startup file::
 
-    eval "`invx completion --bash`"
+    eval "`viol completion --bash`"

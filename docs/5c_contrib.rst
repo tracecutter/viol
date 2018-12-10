@@ -14,7 +14,7 @@ Types of Contributions
 Report Bugs
 ~~~~~~~~~~~
 
-Create an issue for project **EDF to XLSX** at CreateIssue_ for the component *invx*.
+Create an issue for project **Viol Design** at CreateIssue_ for the component *viol*.
 
 .. _CreateIssue: http://xxx.xx
 
@@ -39,7 +39,7 @@ is open to whoever wants to implement it.
 Write Documentation
 ~~~~~~~~~~~~~~~~~~~
 
-:ref:`invx` could always use more documentation.  :ref:`invx` utilizes Sphinx_ to produce the online documentation.
+:ref:`viol` could always use more documentation.  :ref:`viol` utilizes Sphinx_ to produce the online documentation.
 
 .. _Sphinx: http://sphinx-doc.org/
 
@@ -56,17 +56,17 @@ If you are proposing a feature:
 Get Started!
 ------------
 
-Ready to contribute? Here's how to set up `invx` for local development.
+Ready to contribute? Here's how to set up `viol` for local development.
 
-1. Fork the `invx` repo
+1. Fork the `viol` repo
 2. Clone your fork locally::
 
     $ git clone xxx
 
 3. Install your local copy into a virtualenv. Assuming you have virtualenvwrapper installed, this is how you set up your fork for local development::
 
-    $ mkvirtualenv invx
-    $ cd invx/
+    $ mkvirtualenv viol
+    $ cd viol/
     $ python setup.py develop
     $ pip install -r requirements_dev.txt
 
@@ -109,4 +109,4 @@ Before you submit a pull request, check that it meets these guidelines:
 
   To run a subset of tests::
 
-      $ python -m unittest tests.test_invx
+      $ python -m unittest tests.test_viol

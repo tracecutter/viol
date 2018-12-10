@@ -10,7 +10,7 @@ Lxml installation
 Overview
 --------
 The installation of lxml python support is not fully supported by pip on all platforms,
-so it is necessary to pre-install it before installing invx.  Instructions for the
+so it is necessary to pre-install it before installing viol.  Instructions for the
 installation of lxml by platform are summarized below.  The `official installation
 instructions <http://lxml.de/installation.html>`_ contain more background information.
 
@@ -35,7 +35,7 @@ automate installation with their standard tools.
 Linux
 -----
 On linux the standard pip installation functions correctly.  The installation will be
-performed automatically when invx is installed, so no further steps are required.
+performed automatically when viol is installed, so no further steps are required.
 
 .. _install_lxml_macosx:
 

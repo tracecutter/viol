@@ -19,6 +19,6 @@ List information on programs
 
   ::
 
-  $ invx list -s -l 640T
+  $ viol list -s -l 640T
 
 This information is extracted from asana.

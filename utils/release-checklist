@@ -8,10 +8,10 @@ Release checklist
 * make test
 * make dist
 * check integrity of downloads
-	- invx.epub
-	- invx.html.tar.gz
-	- invx.pdf
-	- invx.tar.gz (--exclude .git / --exclude .svn)
+	- viol.epub
+	- viol.html.tar.gz
+	- viol.pdf
+	- viol.tar.gz (--exclude .git / --exclude .svn)
 * make clean
 * make RELEASE="x.x.x" release
 * make RELEASE="latest" release-pub

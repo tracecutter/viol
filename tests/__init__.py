@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-    invx.tests
+    viol.tests
     ~~~~~~~~~~
 
     Tests base class constructor.

@@ -9,9 +9,9 @@ Bash Integration
 
 Overview
 --------
-Interactive use of invx via the bash shell is optional.  Quite often invx simply
+Interactive use of viol via the bash shell is optional.  Quite often viol simply
 operates in the background in a supporting role to build scripts, and other
-continuous integration activities.  On Windows, invx can be used directly from
+continuous integration activities.  On Windows, viol can be used directly from
 the command prompt or powershell.  So if a richer command line interface is of
 no interest, you can skip the instructions here.
 
@@ -140,18 +140,18 @@ Regardless of which bash shell installation strategy has been chosen, it
 must be configured to provide full functionality.  The key user configuration
 files for bash are *~/.bashrc* and *~/.profile*.
 
-invx includes support for command line completion in bash and zsh.
+viol includes support for command line completion in bash and zsh.
 
 To setup for bash::
 
-    $ invx completion --bash >> ~/.profile
+    $ viol completion --bash >> ~/.profile
 
 To setup for zsh::
 
-    $ invx completion --zsh >> ~/.zprofile
+    $ viol completion --zsh >> ~/.zprofile
 
 Alternatively, you can use the result of the ``completion`` command
 directly with the eval function of you shell, e.g. by adding the following to your startup file::
 
-    eval "`invx completion --bash`"
+    eval "`viol completion --bash`"
 

@@ -17,7 +17,7 @@ help:
 	@echo "clean-build - remove build artifacts"
 	@echo "clean-pyc - remove Python file artifacts"
 	@echo "clean-bak - remove backup files"
-	@echo "clean-gen - remove invx generated files"
+	@echo "clean-gen - remove viol generated files"
 	@echo "clean-docs - remove doc build artifacts"
 	@echo "lint - check style with flake8 and pylint"
 	@echo "lint-flake8 - check style with flake8"
@@ -62,12 +62,12 @@ lint: lint-flake8 lint-pylint
 lint-flake8:
 	@echo "FLAKE 8 Results"
 	@echo "==============="
-	-@flake8 invx tests
+	-@flake8 viol tests
 
 lint-pylint:
 	@echo "PYLINT Results"
 	@echo "==============="
-	@pylint --rcfile=utils/pylint.rc --disable=W invx tests
+	@pylint --rcfile=utils/pylint.rc --disable=W viol tests
 
 reindent:
 	python utils/reindent.py -r -n .
@@ -85,7 +85,7 @@ test-all:
 	tox
 
 covertest: build
-	coverage run --source invx setup.py test
+	coverage run --source viol setup.py test
 	coverage report -m
 	coverage html
 	open htmlcov/index.html
@@ -111,17 +111,17 @@ dist: clean install docs-all
 	pip install --download ./dist -r requirements.txt 
 	mkdir -p downloads/downloads/htmlzip/$(RELEASE) downloads/downloads/pdf/$(RELEASE) downloads/downloads/epub/$(RELEASE) \
 		downloads/downloads/src/$(RELEASE) downloads/docs/$(RELEASE)
-	(cd docs/_build; tar cvf ../../downloads/downloads/htmlzip/$(RELEASE)/invx.html.tar ./html)
-	gzip -f downloads/downloads/htmlzip/$(RELEASE)/invx.html.tar
+	(cd docs/_build; tar cvf ../../downloads/downloads/htmlzip/$(RELEASE)/viol.html.tar ./html)
+	gzip -f downloads/downloads/htmlzip/$(RELEASE)/viol.html.tar
 	cp -prf docs/_build/html/* downloads/docs/$(RELEASE)
-	tar cvf downloads/downloads/src/$(RELEASE)/invx.tar --exclude .svn --exclude .git --exclude build --exclude downloads \
+	tar cvf downloads/downloads/src/$(RELEASE)/viol.tar --exclude .svn --exclude .git --exclude build --exclude downloads \
 		--exclude _build --exclude dist --exclude pre_install --exclude "*.pyc" .
-	gzip -f downloads/downloads/src/$(RELEASE)/invx.tar
-	cp -pf docs/_build/latex/invx.pdf downloads/downloads/pdf/$(RELEASE)/invx.pdf
-	cp -pf docs/_build/epub/invx.epub downloads/downloads/epub/$(RELEASE)/invx.epub
-	(cd downloads; tar cvf invx_pub_$(RELEASE).tar --exclude "invx_pub_*.tar" .)
+	gzip -f downloads/downloads/src/$(RELEASE)/viol.tar
+	cp -pf docs/_build/latex/viol.pdf downloads/downloads/pdf/$(RELEASE)/viol.pdf
+	cp -pf docs/_build/epub/viol.epub downloads/downloads/epub/$(RELEASE)/viol.epub
+	(cd downloads; tar cvf viol_pub_$(RELEASE).tar --exclude "viol_pub_*.tar" .)
 	@echo "Local install:"
-	@echo "-> pip install --no-index --find-links=./dist invx"
+	@echo "-> pip install --no-index --find-links=./dist viol"
 
 release-package: dist
 	$(error Releasing to google sites not supported yet.)
@@ -129,12 +129,12 @@ release-package: dist
 	rm -fr /Volumes/ev_devops/packages/simple
 	(cd /Volumes/ev_devops; dir2pi -S packages)
 	@echo "Public install:"
-	@echo "-> pip install --allow-unverified --allow-all-external --no-index --find-links http://xxx/devops/packages invx"
+	@echo "-> pip install --allow-unverified --allow-all-external --no-index --find-links http://xxx/devops/packages viol"
 
 release-pub: dist
 	$(error Releasing to google sites not supported yet.)
-	find /Volumes/ev_devops/invx -type d -name "$(RELEASE)" -print
-	tar xvf downloads/invx_pub_$(RELEASE).tar -C /Volumes/ev_devops/invx
+	find /Volumes/ev_devops/viol -type d -name "$(RELEASE)" -print
+	tar xvf downloads/viol_pub_$(RELEASE).tar -C /Volumes/ev_devops/viol
 
 release-pypi: dist
 	$(error Releasing to PyPi is not permitted.)
@@ -142,5 +142,5 @@ release-pypi: dist
 	python setup.py bdist_wheel upload
 
 release: release-pub
-	@echo "invx $(RELEASE) package uploaded to http://xxx/devops/packages."
-	@echo "invx $(RELEASE) documentation and downloads uploaded to http://xxx/devops/invx/docs."
+	@echo "viol $(RELEASE) package uploaded to http://xxx/devops/packages."
+	@echo "viol $(RELEASE) documentation and downloads uploaded to http://xxx/devops/viol/docs."

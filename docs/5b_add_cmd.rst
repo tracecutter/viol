@@ -3,4 +3,4 @@
 Adding a New Command
 ====================
 
-This section describes how to add a new command to the invx utility.
+This section describes how to add a new command to the viol utility.

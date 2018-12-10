@@ -1,9 +1,9 @@
 .. _`api_overview`:
 
-invx overview
+viol overview
 =============
 
-The file structure of invx is as follows.
+The file structure of viol is as follows.
 
 .. graphviz:: tree.dot
 

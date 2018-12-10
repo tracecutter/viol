@@ -9,30 +9,30 @@ Hardware Setup
 Open a Hub Console
 ------------------
 
-Install invx
+Install viol
 ------------
 
 First, if you have virtualenvwrapper installed (optional)::
 
-    $ mkvirtualenv invx
+    $ mkvirtualenv viol
 
 then to install from git repository::
 
-    $ pip install git+https://github/bitharmony/invx.git
+    $ pip install git+https://github/bitharmony/viol.git
 
-*- or -* use setup.py to install from a locally cloned copy of the invx package::
+*- or -* use setup.py to install from a locally cloned copy of the viol package::
 
     $ python setup.py install
 
-*- or -* use make to install from a locally cloned copy of the invx package::
+*- or -* use make to install from a locally cloned copy of the viol package::
 
     $ make install
 
-Upgrade invx
+Upgrade viol
 ------------
 
 To upgrade::
 
-    $ pip install -U invx
+    $ pip install -U viol
 
 

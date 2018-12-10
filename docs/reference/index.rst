@@ -6,8 +6,8 @@ Reference Guide
 .. toctree::
    :maxdepth: 2
 
-   invx
-   invx_list
-   invx_search
-   invx_show
+   viol
+   viol_list
+   viol_search
+   viol_show
 

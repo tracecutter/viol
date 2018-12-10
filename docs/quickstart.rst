@@ -1,7 +1,7 @@
 Quickstart
 ==========
 
-First, :doc:`Install invx <install>`.
+First, :doc:`Install viol <install>`.
 
 Brief, quiet summary of program information
 
@@ -10,16 +10,16 @@ Brief, quiet summary of program information
 
 ::
 
-  $ invx show -b -q -c 640T
+  $ viol show -b -q -c 640T
     [...]
 
 Get help:
 
 ::
 
-  $ invx help
+  $ viol help
     [usage information]
 
-  $ invx help translate
+  $ viol help translate
     [sub-command usage information]
 

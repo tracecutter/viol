@@ -1,4 +1,6 @@
 click>=6.7
-xlsxwriter>=1.0.2
+numpy>=1.15.4
+matplotlib>=2.2.3
+scipy>=1.1.0
 colorama>=0.3.9
 six>=1.11.0

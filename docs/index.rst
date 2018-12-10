@@ -1,14 +1,14 @@
-.. _invx:
+.. _viol:
 
 ====
-invx
+viol
 ====
 
 .. only:: html
 
-    `invx git repo <https://github.com/tracecutter/invx>`_
+    `viol git repo <https://github.com/tracecutter/viol>`_
 
-    invx (Zigbee to Aurora) Command Line Utility Documentation
+    viol (Zigbee to Aurora) Command Line Utility Documentation
 
 .. toctree::
    :maxdepth: 2

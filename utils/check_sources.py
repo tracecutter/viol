@@ -237,7 +237,7 @@ def main(argv):
             if abspath(root) in ignored_paths:
                 del dirs[:]
                 continue
-            in_check_pkg = root.startswith('./invx')
+            in_check_pkg = root.startswith('./viol')
             for fn in files:
 
                 fn = join(root, fn)

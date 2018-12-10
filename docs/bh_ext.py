@@ -1,4 +1,4 @@
-"""invx sphinx extensions"""
+"""viol sphinx extensions"""
 
 import optparse
 import sys
@@ -6,13 +6,13 @@ from docutils import nodes
 from docutils.parsers import rst
 from docutils.statemachine import ViewList
 from textwrap import dedent
-from invx import commands
-from invx import cmdoptions
-from invx.utils.cli_opt_files import default_log_file
-from invx.utils.util import get_prog
+from viol import commands
+from viol import cmdoptions
+from viol.utils.cli_opt_files import default_log_file
+from viol.utils.util import get_prog
 
 
-class InvxCommandUsage(rst.Directive):
+class ViolCommandUsage(rst.Directive):
     required_arguments = 1
 
     def run(self):
@@ -23,7 +23,7 @@ class InvxCommandUsage(rst.Directive):
         return [node]
 
 
-class InvxCommandDescription(rst.Directive):
+class ViolCommandDescription(rst.Directive):
     required_arguments = 1
 
     def run(self):
@@ -37,7 +37,7 @@ class InvxCommandDescription(rst.Directive):
         return [node]
 
 
-class InvxOptions(rst.Directive):
+class ViolOptions(rst.Directive):
 
     def _format_option(self, option, cmd_name=None):
         if cmd_name:
@@ -80,28 +80,28 @@ class InvxOptions(rst.Directive):
         return [node]
 
 
-class InvxGeneralOptions(InvxOptions):
+class ViolGeneralOptions(ViolOptions):
     def process_options(self):
         self._format_options(
             [o.make() for o in cmdoptions.general_group['options']]
         )
 
 
-class InvxFileLocaleOptions(InvxOptions):
+class ViolFileLocaleOptions(ViolOptions):
     def process_options(self):
         self._format_options(
             [o.make() for o in cmdoptions.file_locale_group['options']]
         )
 
 
-class InvxFileOutputOptions(InvxOptions):
+class ViolFileOutputOptions(ViolOptions):
     def process_options(self):
         self._format_options(
             [o.make() for o in cmdoptions.file_output_group['options']]
         )
 
 
-class InvxCommandOptions(InvxOptions):
+class ViolCommandOptions(ViolOptions):
     required_arguments = 1
 
     def process_options(self):
@@ -113,9 +113,9 @@ class InvxCommandOptions(InvxOptions):
 
 
 def setup(app):
-    app.add_directive('invx-command-usage', InvxCommandUsage)
-    app.add_directive('invx-command-description', InvxCommandDescription)
-    app.add_directive('invx-command-options', InvxCommandOptions)
-    app.add_directive('invx-general-options', InvxGeneralOptions)
-    app.add_directive('invx-file-locale-options', InvxFileLocaleOptions)
-    app.add_directive('invx-file-output-options', InvxFileOutputOptions)
+    app.add_directive('viol-command-usage', ViolCommandUsage)
+    app.add_directive('viol-command-description', ViolCommandDescription)
+    app.add_directive('viol-command-options', ViolCommandOptions)
+    app.add_directive('viol-general-options', ViolGeneralOptions)
+    app.add_directive('viol-file-locale-options', ViolFileLocaleOptions)
+    app.add_directive('viol-file-output-options', ViolFileOutputOptions)
