@@ -1,24 +1,28 @@
 #!/usr/bin/env python
 
 import csv
+import json
+import jsonpickle
 import numpy as np
 from scipy.special import fresnel
 from scipy.spatial import distance
 import matplotlib.pyplot as plt
 import math
 
+"""
 a  = [210,148,45,68,36,48.4,163,107,210,148,45,68,36,48.4,163,107]
 r1 = [-2.434,0.0,1.05,-1.455,1.756,1.2,0.83,0.0,-2.434,0.0,1.05,-1.455,1.756,1.2,0.83,0.0]
 d1 = [-37,0,-107,-60,-60.5,-87,-37,0,37,0,107,60,60.5,87,37,0]
 d2 = [205,0,127,212,240,302,223,382.5,205,0,127,212,240,302,223,382.5]
 h  = [1,-1,1,-1,1,1,-1,-1,-1,1,-1,1,-1,-1,1,1]
 v  = [1,1,1,1,1,-1,1,-1,1,1,1,1,1,-1,1,-1]
+"""
 
 t = np.linspace(0,2.1, 1000)
 ss, cc = fresnel(t)
 
 
-class Clothoid:
+class Clothoid(object):
     def __init__(self, scale=1, rotation=0, origin=(0,0), hflip=1, vflip=1):
         self.scale      = scale
         self.rotation   = rotation
@@ -38,26 +42,33 @@ class Clothoid:
                  (self.scale * ss * math.cos(self.rotation))) + \
                 self.origin[1])
     
-class Viola:
-    def __init__(self, clothoids, reflect=True):
-        self.clothoids = clothoids
+class Viola(object):
+    def __init__(self):
+        self.clothoids = []
+        self.outline = []
+
+    def plot (self, plot):
+        for clothoid in self.clothoids:
+            plot.plot(clothoid.sinVec(), clothoid.cosVec(), 'r-', linewidth=1)
+        plt.plot(*zip(*self.outline))
+
+    # XXX add reflection
+    # def reflect(self):
         #if reflect:
         #    for cl in clothoids:
         #        cl.append(  cant append to current iteraration  need to build list
 
-def outlineRead (filename = "outline.csv"):
-    outline = []
-    with open(filename, 'rb') as f:
-        reader = csv.reader(f)
-        for row in reader:
-            outline.append ((float(row[0]), float(row[1])))
-    return outline
+    def to_json(self):
+        return jsonpickle.encode(self)
 
-def plotViola (plot, viola):
-    for clothoid in viola.clothoids:
-        plot.plot(clothoid.sinVec(), clothoid.cosVec(), 'r-', linewidth=1)
+    @classmethod
+    def from_json(cls,json_str):
+        return jsonpickle.decode(json_str)
+
+
 
 while True:
+    """
     clist = [
             Clothoid(210,-2.434,(-37,205),1,1),
             Clothoid(148,0,(0,0),-1,1),
@@ -75,20 +86,30 @@ while True:
             Clothoid(48.4,1.2,(87,302),-1,-1),
             Clothoid(163,0.83,(37,223),1,1),
             Clothoid(107,0,(0,382.5),1,-1)]
-    viola = Viola(clist)
+    """
 
-    import yaml # pip install pyyaml
-    print(yaml.dump(viola, indent=2))
+    with open("salo.json", 'rb') as f:
+        viola = Viola.from_json(f.read())
 
+    """
+    viola.clothoids = clist
+
+    with open("outline.csv", 'rb') as f:
+        reader = csv.reader(f)
+        for row in reader:
+            viola.outline.append ((float(row[0]), float(row[1])))
+
+    with open("salo.json", 'wb') as f:
+        f.write(viola.to_json())
+    """
+
+    print(json.dumps(json.loads(viola.to_json()), indent=2, sort_keys=True))
 
     plt.figure(figsize=(6,8.4))
     plt.axis([-150,150,0,420])
 
-    plotViola(plt, viola)
+    viola.plot(plt)
 
-
-    outline = outlineRead()
-    plt.plot(*zip(*outline))
     plt.show(block=False)
 
     try:
