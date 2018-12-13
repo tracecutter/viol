@@ -1,4 +1,8 @@
 Prep Work
+	implement outline cropping
+	prototype error "cost" function
+	prototype random hill climbing
+	define viola data set file in JSON or XML
 	clean up compat.py to remove cruft
 	sub command registry and entry point implementation and test
 	enable auto-completion
@@ -28,7 +32,7 @@ Constants
 	l = 0.8945975610421952
 	angle = 29.3337006837 degrees
 
-	For Euler Curve fresnel(1.0), the point furthest y axis deviation from (0,0) is
+	For Euler Curve fresnel(a), the point furthest y axis deviation from (0,0) is
 	a = 1.41421355642
 	x = 0.528891601060559
 	y = 0.7139722140219396

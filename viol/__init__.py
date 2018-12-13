@@ -18,12 +18,12 @@ import os
 import sys
 
 # If we are running from a wheel, add the wheel to sys.path
-# This allows the usage python pip-*.whl/pip install pip-*.whl
+# This allows the usage python viol-*.whl/viol install viol-*.whl
 if __package__ == '':
-    # __file__ is pip-*.whl/pip/__main__.py
-    # first dirname call strips of '/__main__.py', second strips off '/pip'
+    # __file__ is viol-*.whl/viol/__main__.py
+    # first dirname call strips of '/__main__.py', second strips off '/viol'
     # Resulting path is the name of the wheel itself
-    # Add that to sys.path so we can import pip
+    # Add that to sys.path so we can import viol
     path = os.path.dirname(os.path.dirname(__file__))
     sys.path.insert(0, path)
 
@@ -59,6 +59,7 @@ else:
 
 
 @click.group(cls=cmds.make_commands('viol.cmds'))
+@click.version_option(__version__, '--version', '-v')
 @click.option('--outfmt', type=click.Choice(['json', 'yaml', 'csv']))
 @click.option('--debug/--no-debug',
               help='Sets logging level to debug',
