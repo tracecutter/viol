@@ -25,8 +25,18 @@ class Clothoid:
         self.origin     = origin
         self.hflip      = hflip
         self.vflip      = vflip
-        self.sinVec     = hflip*((scale * cc * math.cos(rotation)) - (scale * ss * math.sin(rotation))) + origin[0]
-        self.cosVec     = vflip*((scale * cc * math.sin(rotation)) + (scale * ss * math.cos(rotation))) + origin[1]
+
+    def sinVec(self):
+        return (self.hflip * \
+                ((self.scale * cc * math.cos(self.rotation)) - \
+                 (self.scale * ss * math.sin(self.rotation))) + \
+                self.origin[0])
+
+    def cosVec(self):
+        return (self.vflip * \
+                ((self.scale * cc * math.sin(self.rotation)) + \
+                 (self.scale * ss * math.cos(self.rotation))) + \
+                self.origin[1])
     
 class Viola:
     def __init__(self, clothoids, reflect=True):
@@ -45,7 +55,7 @@ def outlineRead (filename = "outline.csv"):
 
 def plotViola (plot, viola):
     for clothoid in viola.clothoids:
-        plot.plot(clothoid.sinVec, clothoid.cosVec, 'r-', linewidth=1)
+        plot.plot(clothoid.sinVec(), clothoid.cosVec(), 'r-', linewidth=1)
 
 while True:
     clist = [
@@ -67,7 +77,6 @@ while True:
             Clothoid(107,0,(0,382.5),1,-1)]
     viola = Viola(clist)
 
-    print viola.__dict__
     import yaml # pip install pyyaml
     print(yaml.dump(viola, indent=2))
 
