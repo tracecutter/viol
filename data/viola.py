@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
-import csv
+import os
+import tempfile
 import json
 import jsonpickle
 import numpy as np
@@ -8,13 +9,16 @@ from scipy.special import fresnel
 from scipy.spatial import distance
 import matplotlib.pyplot as plt
 import math
+
+from io import BytesIO
+from subprocess import Popen, PIPE, STDOUT
+from PIL import Image, ImageFilter
 from svgpathtools import Path, parse_path, svg2paths, svg2paths2, wsvg
 from timeit import default_timer as timer
 
 
 t = np.linspace(0,2.1, 1000)
 ss, cc = fresnel(t)
-
 
 class Clothoid(object):
     def __init__(self, scale=1, rotation=0, origin=(0,0), hflip=1, vflip=1):
@@ -38,13 +42,55 @@ class Clothoid(object):
     
 class Viola(object):
     def __init__(self):
-        self.clothoids = []
-        self.outline = []
+        self.clothoids = None
+        self.outline = None
 
+    def scan(self, imageFile, dpi=300, threshold=200):
+        img = Image.open(imageFile)
+        img = img.convert(mode="L")
+
+        # convert from input dots per inch to 100 dots per cm (.1mm resolution)
+        resize = 2540.0/(10.0 * dpi)
+        w, h = img.size
+        img = img.resize((int(w * resize), int(h * resize)), Image.LANCZOS)
+        img = img.point(lambda x: 0 if x < threshold else 255, '1')
+        bmp = BytesIO()
+        img.save(bmp, format='BMP')
+        bmp.seek(0)
+        p = Popen(['potrace','-s','-i','-','-o','-'], stdout=PIPE, stdin=PIPE, stderr=STDOUT)
+        svg_tmp = tempfile.NamedTemporaryFile()
+        svg_tmp.write(p.communicate(input=bmp.read())[0].decode())
+        svg_tmp.flush()
+        paths, attributes, svg_attributes = svg2paths2(svg_tmp.name)
+        svg_tmp.close()
+        path = paths[0]
+        for p in paths:
+            if p.length() > path.length():
+                path = p
+        
+        # use a bounding box to determine x,y extremis
+        xmin, xmax, ymin, ymax = path.bbox()
+        # calculate the shift needed to center y axis to centerline
+        xshift = ((xmax - xmin)/2.0) + xmin
+        # calculate the scaling factor to make each pixel == 0.1mm
+        scale = 1000.0 / 10.0**(math.ceil(np.log10(ymax - ymin)))
+        
+        self.outline = path
+
+        #img = Image.fromarray(bmap,'RGB')
+        #img.show()
+        #quit() 
+
+        #print bmap
+        #plt.imshow(bmap)
+        #plt.show()
+        #quit() 
+        
     def plot (self, plot):
         for clothoid in self.clothoids:
             plot.plot(clothoid.sinVec(), clothoid.cosVec(), 'r-', linewidth=1)
-        plt.plot(*zip(*self.outline))
+        #XXX Need to calculate outline points from Bezier curves
+        #plt.plot(*zip(*self.outline))
 
     # XXX add reflection
     # def reflect(self):
@@ -77,15 +123,25 @@ while True:
     with open("salo.json", 'rb') as f:
         viola = Viola.from_json(f.read())
 
+    viola.scan("clean.png")
+
+    plt.figure(figsize=(6,8.4))
+    plt.axis([-150,150,0,420])
+
     viola.plot(plt)
 
-    paths, attributes, svg_attributes = svg2paths2('clean2.svg')
-    xmin, xmax, ymin, ymax = paths[0].bbox()
-    xshift = ((xmax - xmin)/2.0) + xmin
-    scale = 0.01
-    
-    print xmin, xmax, ymin, ymax
+    plt.show(block=False)
 
+    try:
+        newA=float(raw_input('New A: '))
+    except ValueError:
+        break
+
+    a[0] = newA
+
+plt.close()
+
+def junkOutlineCalc():
     xxx = []
     yyy = []
     for t in np.linspace(.5,.999,1000):
@@ -108,18 +164,6 @@ while True:
         print index, point, (viola.clothoids[0].sinVec()[index], viola.clothoids[0].cosVec()[index]), np.linalg.norm(a-b)
     #print timer() - start
 
-    plt.show(block=False)
-
-    try:
-        newA=float(raw_input('New A: '))
-    except ValueError:
-        break
-
-    a[0] = newA
-
-plt.close()
-
-def junkOutlineCalc():
     paths, attributes, svg_attributes = svg2paths2('clean.svg')
 
     print paths[0]
@@ -128,7 +172,7 @@ def junkOutlineCalc():
     #  print(json.dumps(json.loads(viola.to_json()), indent=2, sort_keys=True))
 
     plt.figure(figsize=(6,8.4))
-    #plt.axis([-150,150,0,420])
+    plt.axis([-150,150,0,420])
     plt.axis([0,40000,0,50000])
 
     xxx = []
