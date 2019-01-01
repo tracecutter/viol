@@ -8,15 +8,9 @@ from scipy.special import fresnel
 from scipy.spatial import distance
 import matplotlib.pyplot as plt
 import math
+from svgpathtools import Path, parse_path, svg2paths, svg2paths2, wsvg
+from timeit import default_timer as timer
 
-"""
-a  = [210,148,45,68,36,48.4,163,107,210,148,45,68,36,48.4,163,107]
-r1 = [-2.434,0.0,1.05,-1.455,1.756,1.2,0.83,0.0,-2.434,0.0,1.05,-1.455,1.756,1.2,0.83,0.0]
-d1 = [-37,0,-107,-60,-60.5,-87,-37,0,37,0,107,60,60.5,87,37,0]
-d2 = [205,0,127,212,240,302,223,382.5,205,0,127,212,240,302,223,382.5]
-h  = [1,-1,1,-1,1,1,-1,-1,-1,1,-1,1,-1,-1,1,1]
-v  = [1,1,1,1,1,-1,1,-1,1,1,1,1,1,-1,1,-1]
-"""
 
 t = np.linspace(0,2.1, 1000)
 ss, cc = fresnel(t)
@@ -65,50 +59,54 @@ class Viola(object):
     def from_json(cls,json_str):
         return jsonpickle.decode(json_str)
 
-
+class Curve(object):
+    def __init__(self, vector, min_x, max_x, min_y, max_y):
+        self.curve = []
+        clip_start = False
+        for (x,y) in vector:
+            if x < min_x or x > max_x or y < min_y or y > max_y:
+                if clip_start:
+                    break
+                else:
+                    clip_start = True
+            else:
+                self.curve.append((x,y))
+    
 
 while True:
-    """
-    clist = [
-            Clothoid(210,-2.434,(-37,205),1,1),
-            Clothoid(148,0,(0,0),-1,1),
-            Clothoid(45,1.05,(-107,127),1,1),
-            Clothoid(68,-1.455,(-60,212),-1,1),
-            Clothoid(36,1.756,(-60.5,240),1,1),
-            Clothoid(48.4,1.2,(-87,302),1,-1),
-            Clothoid(163,0.83,(-37,223),-1,1),
-            Clothoid(107,0,(0,382.5),-1,-1),
-            Clothoid(210,-2.434,(37,205),-1,1),
-            Clothoid(148,0,(0,0),1,1),
-            Clothoid(45,1.05,(107,127),-1,1),
-            Clothoid(68,-1.455,(60,212),1,1),
-            Clothoid(36,1.756,(60.5,240),-1,1),
-            Clothoid(48.4,1.2,(87,302),-1,-1),
-            Clothoid(163,0.83,(37,223),1,1),
-            Clothoid(107,0,(0,382.5),1,-1)]
-    """
-
     with open("salo.json", 'rb') as f:
         viola = Viola.from_json(f.read())
 
-    """
-    viola.clothoids = clist
-
-    with open("outline.csv", 'rb') as f:
-        reader = csv.reader(f)
-        for row in reader:
-            viola.outline.append ((float(row[0]), float(row[1])))
-
-    with open("salo.json", 'wb') as f:
-        f.write(viola.to_json())
-    """
-
-    print(json.dumps(json.loads(viola.to_json()), indent=2, sort_keys=True))
-
-    plt.figure(figsize=(6,8.4))
-    plt.axis([-150,150,0,420])
-
     viola.plot(plt)
+
+    paths, attributes, svg_attributes = svg2paths2('clean2.svg')
+    xmin, xmax, ymin, ymax = paths[0].bbox()
+    xshift = ((xmax - xmin)/2.0) + xmin
+    scale = 0.01
+    
+    print xmin, xmax, ymin, ymax
+
+    xxx = []
+    yyy = []
+    for t in np.linspace(.5,.999,1000):
+        print paths[0].point(t).real - xshift,paths[0].point(t).imag - ymin
+        xxx.append(scale * (paths[0].point(t).real-xshift))
+        yyy.append(scale * (paths[0].point(t).imag-ymin))
+    plt.plot(xxx,yyy,'r-')
+
+    c = Curve(viola.outline, -150, -1, 1, 240)
+    #print c
+
+    nodes = np.asarray(zip(viola.clothoids[0].sinVec(),viola.clothoids[0].cosVec()))
+    #start = timer()
+    for point in c.curve:
+        dist_2 = np.sum((nodes - point)**2, axis=1)
+        index = np.argmin(dist_2)
+        a = np.array((viola.clothoids[0].sinVec()[index],  viola.clothoids[0].cosVec()[index]))
+        b = np.array(point)
+        plt.plot([a[0],b[0]], [a[1],b[1]], 'g-')
+        print index, point, (viola.clothoids[0].sinVec()[index], viola.clothoids[0].cosVec()[index]), np.linalg.norm(a-b)
+    #print timer() - start
 
     plt.show(block=False)
 
@@ -120,6 +118,35 @@ while True:
     a[0] = newA
 
 plt.close()
+
+def junkOutlineCalc():
+    paths, attributes, svg_attributes = svg2paths2('clean.svg')
+
+    print paths[0]
+
+
+    #  print(json.dumps(json.loads(viola.to_json()), indent=2, sort_keys=True))
+
+    plt.figure(figsize=(6,8.4))
+    #plt.axis([-150,150,0,420])
+    plt.axis([0,40000,0,50000])
+
+    xxx = []
+    yyy = []
+    for t in np.linspace(0,.998,1000):
+        print paths[0].point(t).real,paths[0].point(t).imag
+        xxx.append(paths[0].point(t).real)
+        yyy.append(paths[0].point(t).imag)
+    plt.plot(xxx,yyy,'r-')
+
+    while True:
+        plt.show(block=False)
+
+        try:
+            newA=float(raw_input('New A: '))
+        except ValueError:
+            break
+        break
 
 def junk():
     scaled_ss = h[ix]*((a[ix] * cc * math.cos(r1[ix])) - (a[ix] * ss * math.sin(r1[ix]))) + d1[ix]
