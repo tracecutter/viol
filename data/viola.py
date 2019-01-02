@@ -45,7 +45,7 @@ class Viola(object):
         self.clothoids = None
         self.outline = None
 
-    def scan(self, imageFile, dpi=300, threshold=200):
+    def scan(self, imageFile, dpi=300, threshold=205, despeckle=10):
         img = Image.open(imageFile)
         img = img.convert(mode="L")
 
@@ -54,37 +54,29 @@ class Viola(object):
         w, h = img.size
         img = img.resize((int(w * resize), int(h * resize)), Image.LANCZOS)
         img = img.point(lambda x: 0 if x < threshold else 255, '1')
+
+        # convert the image to a bitmap memory file for input to potrace
         bmp = BytesIO()
         img.save(bmp, format='BMP')
         bmp.seek(0)
-        p = Popen(['potrace','-s','-i','-','-o','-'], stdout=PIPE, stdin=PIPE, stderr=STDOUT)
+
+        # execute potrace as a subprocess filter stdin to stdout
+        p = Popen(['potrace','-s', '-t', str(despeckle)], stdout=PIPE, stdin=PIPE, stderr=STDOUT)
         svg_tmp = tempfile.NamedTemporaryFile()
         svg_tmp.write(p.communicate(input=bmp.read())[0].decode())
         svg_tmp.flush()
+
+        # parse the svg file to extract the cubic bezier curve paths
         paths, attributes, svg_attributes = svg2paths2(svg_tmp.name)
         svg_tmp.close()
+
+        # assume here that the longest path is the outline we want, and rest is clutter
         path = paths[0]
         for p in paths:
             if p.length() > path.length():
                 path = p
         
-        # use a bounding box to determine x,y extremis
-        xmin, xmax, ymin, ymax = path.bbox()
-        # calculate the shift needed to center y axis to centerline
-        xshift = ((xmax - xmin)/2.0) + xmin
-        # calculate the scaling factor to make each pixel == 0.1mm
-        scale = 1000.0 / 10.0**(math.ceil(np.log10(ymax - ymin)))
-        
         self.outline = path
-
-        #img = Image.fromarray(bmap,'RGB')
-        #img.show()
-        #quit() 
-
-        #print bmap
-        #plt.imshow(bmap)
-        #plt.show()
-        #quit() 
         
     def plot (self, plot):
         for clothoid in self.clothoids:
@@ -118,15 +110,39 @@ class Curve(object):
             else:
                 self.curve.append((x,y))
     
+def outline_normalizer(path):
+    # use a bounding box to determine x,y extremis
+    xmin, xmax, ymin, ymax = path.bbox()
+    # calculate the shift needed to center y axis to centerline
+    xshift = ((xmax - xmin)/2.0) + xmin
+    # calculate the scaling factor to make each pixel == 0.1mm
+    scale = 1000.0 / 10.0**(math.ceil(np.log10(ymax - ymin)))
+
+    return xmin, xmax, ymin, ymax, xshift, scale
+    
+def outline_to_bbox(path):
+    xmin, xmax, ymin, ymax, xshift, scale = outline_normalizer(path)
+    return round(scale * (xmin - xshift),1), round(scale * (xmax - xshift),1), 0.0, round(scale * (ymax - ymin),1)
+
+def outline_to_nodes(path):
+    xmin, xmax, ymin, ymax, xshift, scale = outline_normalizer(path)
+    x = []
+    y = []
+    for t in np.linspace(.501,1.0,1000):
+        x.append(scale * (path.point(t).real - xshift))
+        y.append(scale * (path.point(t).imag - ymin))
+    return x,y
 
 while True:
     with open("salo.json", 'rb') as f:
         viola = Viola.from_json(f.read())
 
     viola.scan("clean.png")
+    x,y = outline_to_nodes(viola.outline)
 
     plt.figure(figsize=(6,8.4))
     plt.axis([-150,150,0,420])
+    plt.plot(x,y,'r-')
 
     viola.plot(plt)
 
