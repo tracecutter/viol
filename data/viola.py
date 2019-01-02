@@ -13,7 +13,7 @@ import math
 from io import BytesIO
 from subprocess import Popen, PIPE, STDOUT
 from PIL import Image, ImageFilter
-from svgpathtools import Path, parse_path, svg2paths, svg2paths2, wsvg
+from svgpathtools import Path, parse_path, svg2paths, svg2paths2, wsvg, disvg
 from timeit import default_timer as timer
 
 
@@ -43,7 +43,9 @@ class Clothoid(object):
 class Viola(object):
     def __init__(self):
         self.clothoids = None
-        self.outline = None
+        self.scan_path = None
+        self.scan_attributes = None
+        self.scan_svg_attributes = None
 
     def scan(self, imageFile, dpi=300, threshold=205, despeckle=10):
         img = Image.open(imageFile)
@@ -76,7 +78,9 @@ class Viola(object):
             if p.length() > path.length():
                 path = p
         
-        self.outline = path
+        self.scan_path = path
+        self.scan_attributes = attributes
+        self.scan_svg_attributes = svg_attributes
         
     def plot (self, plot):
         for clothoid in self.clothoids:
@@ -110,7 +114,7 @@ class Curve(object):
             else:
                 self.curve.append((x,y))
     
-def outline_normalizer(path):
+def scan_normalizer(path):
     # use a bounding box to determine x,y extremis
     xmin, xmax, ymin, ymax = path.bbox()
     # calculate the shift needed to center y axis to centerline
@@ -120,12 +124,12 @@ def outline_normalizer(path):
 
     return xmin, xmax, ymin, ymax, xshift, scale
     
-def outline_to_bbox(path):
-    xmin, xmax, ymin, ymax, xshift, scale = outline_normalizer(path)
+def scan_to_bbox(path):
+    xmin, xmax, ymin, ymax, xshift, scale = scan_normalizer(path)
     return round(scale * (xmin - xshift),1), round(scale * (xmax - xshift),1), 0.0, round(scale * (ymax - ymin),1)
 
-def outline_to_nodes(path):
-    xmin, xmax, ymin, ymax, xshift, scale = outline_normalizer(path)
+def scan_to_nodes(path):
+    xmin, xmax, ymin, ymax, xshift, scale = scan_normalizer(path)
     x = []
     y = []
     for t in np.linspace(.501,1.0,1000):
@@ -133,12 +137,40 @@ def outline_to_nodes(path):
         y.append(scale * (path.point(t).imag - ymin))
     return x,y
 
+def scan_to_params(path):
+    return
+
+def tan_vert(t,path):
+    if t < 0:
+        return t
+    elif t > 1:
+        return -t
+    return path.unit_tangent(t).real
+    
 while True:
+    from scipy.optimize import newton
     with open("salo.json", 'rb') as f:
         viola = Viola.from_json(f.read())
 
     viola.scan("clean.png")
-    x,y = outline_to_nodes(viola.outline)
+    
+    xmin, xmax, ymin, ymax, xshift, scale = scan_normalizer(viola.scan_path)
+    print xmin, xmax, ymin, ymax, xshift, scale
+
+    for T in np.linspace(.321,.323,10):
+        k,t = viola.scan_path.T2t(T)
+        print k, T, t, (scale * (viola.scan_path[k].point(t).real - xshift), scale * (viola.scan_path[k].point(t).imag - ymin))
+        print "Tangent: ", viola.scan_path[k].unit_tangent(t)
+
+    k,t = viola.scan_path.T2t(.321)
+
+    print newton(tan_vert, .5, tol=.00001, args=(viola.scan_path[k],))
+
+    quit()
+
+    disvg([viola.scan_path], 'g')
+
+    x,y = scan_to_nodes(viola.scan_path)
 
     plt.figure(figsize=(6,8.4))
     plt.axis([-150,150,0,420])
