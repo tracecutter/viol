@@ -77,11 +77,32 @@ class Viola(object):
         for p in paths:
             if p.length() > path.length():
                 path = p
+
+        # outline path traces both outside and inside the trace... we only want inside trace
+        # XXX we assume here that potrace closes the outside curve before starting the
+        # inside curve.  It is probably more defensive to chose the first segment endpoint (after t > 0.1)
+        # that has the closest Euclidean distance to the starting point.
+
+        endpoints = [ix for ix, seg in enumerate(path) if seg.point(1) == path.point(0)]
+        del(path[endpoints[0]+1:])
         
         self.scan_path = path
         self.scan_attributes = attributes
-        self.scan_svg_attributes = svg_attributes
+        self.scan_svg_attributes = svg_attributes   # XXX Seems not to like svg version of 1.0
         
+    def metrics_from_scan(self):
+        """Use properties of a Viola to establish bout location and widths, corner locations, etc."""
+        xmin, xmax, ymin, ymax, xshift, scale = scan_normalizer(viola.scan_path)
+
+        #XXX start work here on feature extraction (vertical tangents, horizontal tangents, corners)
+        for T in np.linspace(.321,.323,10):
+            k,t = viola.scan_path.T2t(T)
+            print k, T, t, (scale * (viola.scan_path[k].point(t).real - xshift), scale * (viola.scan_path[k].point(t).imag - ymin))
+            print "Tangent: ", viola.scan_path[k].unit_tangent(t)
+
+        k,t = viola.scan_path.T2t(.321)
+        return
+
     def plot (self, plot):
         for clothoid in self.clothoids:
             plot.plot(clothoid.sinVec(), clothoid.cosVec(), 'r-', linewidth=1)
@@ -132,43 +153,20 @@ def scan_to_nodes(path):
     xmin, xmax, ymin, ymax, xshift, scale = scan_normalizer(path)
     x = []
     y = []
-    for t in np.linspace(.501,1.0,1000):
+    for t in np.linspace(0.0,1.0,1000):
         x.append(scale * (path.point(t).real - xshift))
         y.append(scale * (path.point(t).imag - ymin))
     return x,y
 
-def scan_to_params(path):
-    return
-
-def tan_vert(t,path):
-    if t < 0:
-        return t
-    elif t > 1:
-        return -t
-    return path.unit_tangent(t).real
-    
 while True:
-    from scipy.optimize import newton
     with open("salo.json", 'rb') as f:
         viola = Viola.from_json(f.read())
 
     viola.scan("clean.png")
     
-    xmin, xmax, ymin, ymax, xshift, scale = scan_normalizer(viola.scan_path)
-    print xmin, xmax, ymin, ymax, xshift, scale
+    # viola.metrics_from_scan()
 
-    for T in np.linspace(.321,.323,10):
-        k,t = viola.scan_path.T2t(T)
-        print k, T, t, (scale * (viola.scan_path[k].point(t).real - xshift), scale * (viola.scan_path[k].point(t).imag - ymin))
-        print "Tangent: ", viola.scan_path[k].unit_tangent(t)
-
-    k,t = viola.scan_path.T2t(.321)
-
-    print newton(tan_vert, .5, tol=.00001, args=(viola.scan_path[k],))
-
-    quit()
-
-    disvg([viola.scan_path], 'g')
+    # XXX disvg([viola.scan_path], 'g')
 
     x,y = scan_to_nodes(viola.scan_path)
 
@@ -176,7 +174,7 @@ while True:
     plt.axis([-150,150,0,420])
     plt.plot(x,y,'r-')
 
-    viola.plot(plt)
+    # XXX viola.plot(plt)
 
     plt.show(block=False)
 
