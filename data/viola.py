@@ -8,6 +8,7 @@ import numpy as np
 from scipy.special import fresnel
 from scipy.spatial import distance
 import matplotlib.pyplot as plt
+import math
 from math import ceil, log, sqrt
 
 from io import BytesIO
@@ -91,9 +92,8 @@ class Viola(object):
         xmin, xmax, ymin, ymax = path.bbox()                    # use a bounding box to determine x,y extremis
         xshift = ((xmax - xmin)/2.0) + xmin                     # calculate shift to center y axis on centerline
         scale = 1000.0 / 10.0**(ceil(np.log10(ymax - ymin)))    # calculate scaling factor for pixel == 0.1mm
-        trans = complex(-xshift, -ymin)                           # complex translation vector
-        path = path.translated(trans)
-        path = path.scaled(scale)
+        path = path.translated(complex(-xshift, -ymin))         # complex translation vector
+        path = path.scaled(scale)                               # scale path to 10 pixels/mm
 
         self.scan_path = path
         self.scan_attributes = attributes
@@ -101,9 +101,12 @@ class Viola(object):
         
     def metrics_from_scan(self):
         """Use properties of a Viola to establish bout location and widths, corner locations, etc."""
-        prev = "X"
-        xmin, xmax, ymin, ymax, xshift, scale = scan_normalizer(viola.scan_path)
+        #disvg([path], 'g')
+        #quit()
+        #del(viola.scan_path[:550])
+        #del(viola.scan_path[3:])
 
+        prev = "X"
         extrema = []
         for ix, seg in enumerate(self.scan_path):
             # do we have a segment of interest based upon:
@@ -139,7 +142,7 @@ class Viola(object):
                         extreme = p_max
                         extreme_t = t_max
 
-                    extrema.append((ix, extreme_t, scale * (extreme.real - xshift), scale * (extreme.imag - ymin)))
+                    extrema.append((ix, extreme_t, extreme.real, extreme.imag))
                     
                 #print ix, tuple(np.subtract((extreme.real, extreme.imag),(xshift,ymin))), seg.unit_tangent(extreme_t), seg.curvature(extreme_t)
         extrema = sorted (extrema, reverse=True, key=lambda extreme: viola.scan_path[extreme[0]].curvature(extreme[1]))
@@ -152,8 +155,6 @@ class Viola(object):
         #print extrema
 
         #quit()
-
-        #xmin, xmax, ymin, ymax, xshift, scale = scan_normalizer(viola.scan_path)
 
         #XXX start work here on feature extraction (vertical tangents, horizontal tangents, corners)
         #for T in np.linspace(.321,.323,10):
@@ -250,146 +251,36 @@ def bez_extrema_t(p):
             t_min = t
     return t_min, t_max
 
-def scan_normalizer(path):
-    # use a bounding box to determine x,y extremis
-    xmin, xmax, ymin, ymax = path.bbox()
-    # calculate the shift needed to center y axis to centerline
-    xshift = ((xmax - xmin)/2.0) + xmin
-    # calculate the scaling factor to make each pixel == 0.1mm
-    scale = 1000.0 / 10.0**(ceil(np.log10(ymax - ymin)))
-
-    return xmin, xmax, ymin, ymax, xshift, scale
-    
-def scan_to_bbox(path):
-    xmin, xmax, ymin, ymax, xshift, scale = scan_normalizer(path)
-    return round(scale * (xmin - xshift),1), round(scale * (xmax - xshift),1), 0.0, round(scale * (ymax - ymin),1)
-
 def scan_to_nodes(path):
-    xmin, xmax, ymin, ymax, xshift, scale = scan_normalizer(path)
-    print xmin, xmax, ymin, ymax, xshift, scale
     x = []
     y = []
     for t in np.linspace(0.0,1.0,1000):
-        x.append(scale * (path.point(t).real - xshift))
-        y.append(scale * (path.point(t).imag - ymin))
+        x.append(path.point(t).real)
+        y.append(path.point(t).imag)
     return x,y
 
-while True:
-    with open("salo.json", 'rb') as f:
-        viola = Viola.from_json(f.read())
+# Main entry point
+#
 
-    viola.scan("clean.png")
-    
-    # XXX disvg([viola.scan_path], 'g')
+with open("salo.json", 'rb') as f:
+    viola = Viola.from_json(f.read())
 
+viola.scan("clean.png")
 
-    #del(viola.scan_path[:550])
-    #del(viola.scan_path[3:])
+x,y = scan_to_nodes(viola.scan_path)
 
-    x,y = scan_to_nodes(viola.scan_path)
+plt.figure(figsize=(6,8.4))
+plt.axis([-150,150,0,420])
+plt.plot(x,y,'r-')
 
-    plt.figure(figsize=(6,8.4))
-    plt.axis([-150,150,0,420])
-    plt.plot(x,y,'r-')
+x,y = viola.metrics_from_scan()
+plt.plot (x,y, 'bo', ms=2.0)
 
-    x,y = viola.metrics_from_scan()
-    plt.plot (x,y, 'bo', ms=2.0)
+viola.plot(plt)
 
-    #xxx viola.plot(plt)
+plt.show(block=False)
 
-    plt.show(block=False)
-
-    try:
-        newA=float(raw_input('New A: '))
-    except ValueError:
-        break
-
-    a[0] = newA
+raw_input('<cr> to close program ->')
 
 plt.close()
-
-def junkOutlineCalc():
-    xxx = []
-    yyy = []
-    for t in np.linspace(.5,.999,1000):
-        print paths[0].point(t).real - xshift,paths[0].point(t).imag - ymin
-        xxx.append(scale * (paths[0].point(t).real-xshift))
-        yyy.append(scale * (paths[0].point(t).imag-ymin))
-    plt.plot(xxx,yyy,'r-')
-
-    c = Curve(viola.outline, -150, -1, 1, 240)
-    #print c
-
-    nodes = np.asarray(zip(viola.clothoids[0].sinVec(),viola.clothoids[0].cosVec()))
-    #start = timer()
-    for point in c.curve:
-        dist_2 = np.sum((nodes - point)**2, axis=1)
-        index = np.argmin(dist_2)
-        a = np.array((viola.clothoids[0].sinVec()[index],  viola.clothoids[0].cosVec()[index]))
-        b = np.array(point)
-        plt.plot([a[0],b[0]], [a[1],b[1]], 'g-')
-        print index, point, (viola.clothoids[0].sinVec()[index], viola.clothoids[0].cosVec()[index]), np.linalg.norm(a-b)
-    #print timer() - start
-
-    paths, attributes, svg_attributes = svg2paths2('clean.svg')
-
-    print paths[0]
-
-
-    #  print(json.dumps(json.loads(viola.to_json()), indent=2, sort_keys=True))
-
-    plt.figure(figsize=(6,8.4))
-    plt.axis([-150,150,0,420])
-    plt.axis([0,40000,0,50000])
-
-    xxx = []
-    yyy = []
-    for t in np.linspace(0,.998,1000):
-        print paths[0].point(t).real,paths[0].point(t).imag
-        xxx.append(paths[0].point(t).real)
-        yyy.append(paths[0].point(t).imag)
-    plt.plot(xxx,yyy,'r-')
-
-    while True:
-        plt.show(block=False)
-
-        try:
-            newA=float(raw_input('New A: '))
-        except ValueError:
-            break
-        break
-
-def junk():
-    scaled_ss = h[ix]*((a[ix] * cc * cos(r1[ix])) - (a[ix] * ss * sin(r1[ix]))) + d1[ix]
-    scaled_cc = v[ix]*((a[ix] * cc * sin(r1[ix])) + (a[ix] * ss * cos(r1[ix]))) + d2[ix]
-    plot.plot(scaled_ss, scaled_cc, 'r-', linewidth=1)
-
-    for n in range(len(x) - 1):
-        dx = x[n+1] - x[n]
-        dy = y[n+1] - y[n]
-        vec = degrees(atan2(dy,dx)) - 90
-        if vec < 0:
-            vec+=360
-
-
-        fx = h[0]*((a[0] * cc * cos(r1[0])) - (a[0] * ss * sin(r1[0]))) + d1[0]
-        fy = v[0]*((a[0] * cc * sin(r1[0])) + (a[0] * ss * cos(r1[0]))) + d2[0]
-
-        ix = int(len(fx)/2)
-        ixp =0
-        minerr = 1000.0
-
-        #print fx, ix
-
-        #while (abs(ix - ixp) > 1):
-        #    err = distance.euclidean((x,y),(fx[ix],fy[ix]))
-        #    print ix, x, y, fx[ix], fy[ix], err
-        #    if err < minerr:
-        #        minerr = err
-        #    break
-
-            #if err < last_err:
-            #    n /= -2.0
-            #a += d
-            #l = y
 
