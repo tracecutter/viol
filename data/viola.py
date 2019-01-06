@@ -8,12 +8,12 @@ import numpy as np
 from scipy.special import fresnel
 from scipy.spatial import distance
 import matplotlib.pyplot as plt
-import math
+from math import ceil, log, sqrt
 
 from io import BytesIO
 from subprocess import Popen, PIPE, STDOUT
 from PIL import Image, ImageFilter
-from svgpathtools import Path, parse_path, svg2paths, svg2paths2, wsvg, disvg
+from svgpathtools import Path, Line, CubicBezier, parse_path, svg2paths, svg2paths2, wsvg, disvg, bezier_point, bezier2polynomial
 from timeit import default_timer as timer
 
 
@@ -86,21 +86,82 @@ class Viola(object):
         endpoints = [ix for ix, seg in enumerate(path) if seg.point(1) == path.point(0)]
         del(path[endpoints[0]+1:])
         
+        # normalize the path for (0,0) at the centerline of the bottom of the instrument
+
+        xmin, xmax, ymin, ymax = path.bbox()                    # use a bounding box to determine x,y extremis
+        xshift = ((xmax - xmin)/2.0) + xmin                     # calculate shift to center y axis on centerline
+        scale = 1000.0 / 10.0**(ceil(np.log10(ymax - ymin)))    # calculate scaling factor for pixel == 0.1mm
+        trans = complex(-xshift, -ymin)                           # complex translation vector
+        path = path.translated(trans)
+        path = path.scaled(scale)
+
         self.scan_path = path
         self.scan_attributes = attributes
         self.scan_svg_attributes = svg_attributes   # XXX Seems not to like svg version of 1.0
         
     def metrics_from_scan(self):
         """Use properties of a Viola to establish bout location and widths, corner locations, etc."""
+        prev = "X"
         xmin, xmax, ymin, ymax, xshift, scale = scan_normalizer(viola.scan_path)
 
-        #XXX start work here on feature extraction (vertical tangents, horizontal tangents, corners)
-        for T in np.linspace(.321,.323,10):
-            k,t = viola.scan_path.T2t(T)
-            print k, T, t, (scale * (viola.scan_path[k].point(t).real - xshift), scale * (viola.scan_path[k].point(t).imag - ymin))
-            print "Tangent: ", viola.scan_path[k].unit_tangent(t)
+        extrema = []
+        for ix, seg in enumerate(self.scan_path):
+            # do we have a segment of interest based upon:
+            #    1. A change of tangent sign in the x-axis? (vertical tangent!)
 
-        k,t = viola.scan_path.T2t(.321)
+            # start by looking at the two end points
+            #dx = self.scan_path[0].end.real - self.scan_path[0].start.real
+            #dy = self.scan_path[0].end.imag - self.scan_path[0].start.imag
+
+            pt = seg.unit_tangent(0.5)
+            pprev = prev
+            if isinstance(seg, CubicBezier):
+                if (pt.real >= 0) and (pt.imag > 0) and prev != "1":
+                    prev = "1"
+                if (pt.real < 0) and (pt.imag >= 0) and prev != "2":
+                    prev = "2"
+                if (pt.real < 0) and (pt.imag < 0) and prev != "3":
+                    prev = "3"
+                if (pt.real >= 0) and (pt.imag < 0) and prev != "4":
+                    prev = "4"
+
+                #if prev != pprev:
+                if True:
+                    #print seg
+                    #print [p.real for p in seg]
+                    t_min, t_max = bez_extrema_t([p.real for p in seg])
+                    p_min = seg.point(t_min)
+                    p_max = seg.point(t_max)
+                    if p_min.real <= 0:
+                        extreme = p_min
+                        extreme_t = t_min
+                    else:
+                        extreme = p_max
+                        extreme_t = t_max
+
+                    extrema.append((ix, extreme_t, scale * (extreme.real - xshift), scale * (extreme.imag - ymin)))
+                    
+                #print ix, tuple(np.subtract((extreme.real, extreme.imag),(xshift,ymin))), seg.unit_tangent(extreme_t), seg.curvature(extreme_t)
+        extrema = sorted (extrema, reverse=True, key=lambda extreme: viola.scan_path[extreme[0]].curvature(extreme[1]))
+        extrema_x = []
+        extrema_y = []
+        for extreme in extrema:
+            extrema_x.append(extreme[2])
+            extrema_y.append(extreme[3])
+        return extrema_x, extrema_y
+        #print extrema
+
+        #quit()
+
+        #xmin, xmax, ymin, ymax, xshift, scale = scan_normalizer(viola.scan_path)
+
+        #XXX start work here on feature extraction (vertical tangents, horizontal tangents, corners)
+        #for T in np.linspace(.321,.323,10):
+            #k,t = viola.scan_path.T2t(T)
+            #print k, T, t, (scale * (viola.scan_path[k].point(t).real - xshift), scale * (viola.scan_path[k].point(t).imag - ymin))
+            #print "Tangent: ", viola.scan_path[k].unit_tangent(t)
+
+        #k,t = viola.scan_path.T2t(.321)
         return
 
     def plot (self, plot):
@@ -135,13 +196,67 @@ class Curve(object):
             else:
                 self.curve.append((x,y))
     
+def bez_extrema_t(p):
+    """returns the minimum and maximum for any real cubic bezier"""
+    local_extremizers = [0, 1]
+    if len(p) == 4:  # cubic case
+        a = [p.real for p in p]
+        denom = a[0] - 3*a[1] + 3*a[2] - a[3]
+        if denom != 0:
+            delta = a[1]**2 - (a[0] + a[1])*a[2] + a[2]**2 + (a[0] - a[1])*a[3]
+            if delta >= 0:  # otherwise no local extrema
+                sqdelta = sqrt(delta)
+                tau = a[0] - 2*a[1] + a[2]
+                r1 = (tau + sqdelta)/denom
+                r2 = (tau - sqdelta)/denom
+                if 0 < r1 < 1:
+                    local_extremizers.append(r1)
+                if 0 < r2 < 1:
+                    local_extremizers.append(r2)
+            # initialize min/max point to first point
+            b_min = bezier_point(a,0)
+            t_min = 0
+            b_max = bezier_point(a,0)
+            t_max = 0
+            for t in local_extremizers:
+                b = bezier_point(a,t)
+                if b > b_max:
+                    b_max = b
+                    t_max = t
+                elif b < b_min:
+                    b_min = b
+                    t_min = t
+            return t_min, t_max
+
+    #XXX bail out on tricky curves until fix of polyroots01 complete
+    return 0.0, 1.0
+    # find reverse standard coefficients of the derivative
+    dcoeffs = bezier2polynomial(a, return_poly1d=True).deriv().coeffs
+
+    # find real roots, r, such that 0 <= r <= 1
+    local_extremizers += polyroots01(dcoeffs)
+    # initialize min/max point to first point
+    b_min = bezier_point(a,0)
+    t_min = 0
+    b_max = bezier_point(a,0)
+    t_max = 0
+    for t in local_extremizers:
+        b = bezier_point(a,t)
+        if b > b_max:
+            b_max = b
+            t_max = t
+        elif b < b_min:
+            b_min = b
+            t_min = t
+    return t_min, t_max
+
 def scan_normalizer(path):
     # use a bounding box to determine x,y extremis
     xmin, xmax, ymin, ymax = path.bbox()
     # calculate the shift needed to center y axis to centerline
     xshift = ((xmax - xmin)/2.0) + xmin
     # calculate the scaling factor to make each pixel == 0.1mm
-    scale = 1000.0 / 10.0**(math.ceil(np.log10(ymax - ymin)))
+    scale = 1000.0 / 10.0**(ceil(np.log10(ymax - ymin)))
 
     return xmin, xmax, ymin, ymax, xshift, scale
     
@@ -151,6 +266,7 @@ def scan_to_bbox(path):
 
 def scan_to_nodes(path):
     xmin, xmax, ymin, ymax, xshift, scale = scan_normalizer(path)
+    print xmin, xmax, ymin, ymax, xshift, scale
     x = []
     y = []
     for t in np.linspace(0.0,1.0,1000):
@@ -164,9 +280,11 @@ while True:
 
     viola.scan("clean.png")
     
-    # viola.metrics_from_scan()
-
     # XXX disvg([viola.scan_path], 'g')
+
+
+    #del(viola.scan_path[:550])
+    #del(viola.scan_path[3:])
 
     x,y = scan_to_nodes(viola.scan_path)
 
@@ -174,7 +292,10 @@ while True:
     plt.axis([-150,150,0,420])
     plt.plot(x,y,'r-')
 
-    # XXX viola.plot(plt)
+    x,y = viola.metrics_from_scan()
+    plt.plot (x,y, 'bo', ms=2.0)
+
+    #xxx viola.plot(plt)
 
     plt.show(block=False)
 
@@ -239,20 +360,20 @@ def junkOutlineCalc():
         break
 
 def junk():
-    scaled_ss = h[ix]*((a[ix] * cc * math.cos(r1[ix])) - (a[ix] * ss * math.sin(r1[ix]))) + d1[ix]
-    scaled_cc = v[ix]*((a[ix] * cc * math.sin(r1[ix])) + (a[ix] * ss * math.cos(r1[ix]))) + d2[ix]
+    scaled_ss = h[ix]*((a[ix] * cc * cos(r1[ix])) - (a[ix] * ss * sin(r1[ix]))) + d1[ix]
+    scaled_cc = v[ix]*((a[ix] * cc * sin(r1[ix])) + (a[ix] * ss * cos(r1[ix]))) + d2[ix]
     plot.plot(scaled_ss, scaled_cc, 'r-', linewidth=1)
 
     for n in range(len(x) - 1):
         dx = x[n+1] - x[n]
         dy = y[n+1] - y[n]
-        vec = math.degrees(math.atan2(dy,dx)) - 90
+        vec = degrees(atan2(dy,dx)) - 90
         if vec < 0:
             vec+=360
 
 
-        fx = h[0]*((a[0] * cc * math.cos(r1[0])) - (a[0] * ss * math.sin(r1[0]))) + d1[0]
-        fy = v[0]*((a[0] * cc * math.sin(r1[0])) + (a[0] * ss * math.cos(r1[0]))) + d2[0]
+        fx = h[0]*((a[0] * cc * cos(r1[0])) - (a[0] * ss * sin(r1[0]))) + d1[0]
+        fy = v[0]*((a[0] * cc * sin(r1[0])) + (a[0] * ss * cos(r1[0]))) + d2[0]
 
         ix = int(len(fx)/2)
         ixp =0
