@@ -14,12 +14,11 @@ from math import ceil, log, sqrt
 from io import BytesIO
 from subprocess import Popen, PIPE, STDOUT
 from PIL import Image, ImageFilter
-from svgpathtools import Path, Line, CubicBezier, parse_path, svg2paths, svg2paths2, wsvg, disvg, bezier_point, bezier2polynomial
+from svgpathtools import Path, Line, CubicBezier, parse_path, svg2paths, svg2paths2
+from svgpathtools import wsvg, disvg, bezier_point, bezier2polynomial, kinks, smoothed_path
 from timeit import default_timer as timer
+from time import sleep
 
-
-t = np.linspace(0,2.1, 1000)
-ss, cc = fresnel(t)
 
 class Clothoid(object):
     def __init__(self, scale=1, rotation=0, origin=(0,0), hflip=1, vflip=1):
@@ -29,13 +28,18 @@ class Clothoid(object):
         self.hflip      = hflip
         self.vflip      = vflip
 
+
     def sinVec(self):
+        t = np.linspace(0,2.1, 1000)
+        ss, cc = fresnel(t)
         return (self.hflip * \
                 ((self.scale * cc * math.cos(self.rotation)) - \
                  (self.scale * ss * math.sin(self.rotation))) + \
                 self.origin[0])
 
     def cosVec(self):
+        t = np.linspace(0,2.1, 1000)
+        ss, cc = fresnel(t)
         return (self.vflip * \
                 ((self.scale * cc * math.sin(self.rotation)) + \
                  (self.scale * ss * math.cos(self.rotation))) + \
@@ -47,6 +51,18 @@ class Viola(object):
         self.scan_path = None
         self.scan_attributes = None
         self.scan_svg_attributes = None
+        self.scan_bbox = []
+        self.geom_bout_upper = None
+        self.geom_bout_upper_adj = None
+        self.geom_bout_middle = None
+        self.geom_bout_middle_adj = None
+        self.geom_bout_lower = None
+        self.geom_bout_lower_adj = None
+        self.geom_center_line = None
+        self.geom_corner_upper_left = None
+        self.geom_corner_lower_left = None
+        self.geom_corner_upper_right = None
+        self.geom_corner_lower_right = None
 
     def scan(self, imageFile, dpi=300, threshold=205, despeckle=10):
         img = Image.open(imageFile)
@@ -57,6 +73,8 @@ class Viola(object):
         w, h = img.size
         img = img.resize((int(w * resize), int(h * resize)), Image.LANCZOS)
         img = img.point(lambda x: 0 if x < threshold else 255, '1')
+
+        #img.show()
 
         # convert the image to a bitmap memory file for input to potrace
         bmp = BytesIO()
@@ -73,6 +91,15 @@ class Viola(object):
         paths, attributes, svg_attributes = svg2paths2(svg_tmp.name)
         svg_tmp.close()
 
+        print "Paths Scanned:", len(paths)
+
+        profiles = []
+        for path in paths:
+            if len(path) > 20:
+                profiles.append(path)
+
+        print "Profiles", len(profiles)
+        quit()
         # assume here that the longest path is the outline we want, and rest is clutter
         path = paths[0]
         for p in paths:
@@ -87,89 +114,189 @@ class Viola(object):
         endpoints = [ix for ix, seg in enumerate(path) if seg.point(1) == path.point(0)]
         del(path[endpoints[0]+1:])
         
+        assert(path.iscontinuous())
+
         # normalize the path for (0,0) at the centerline of the bottom of the instrument
 
         xmin, xmax, ymin, ymax = path.bbox()                    # use a bounding box to determine x,y extremis
         xshift = ((xmax - xmin)/2.0) + xmin                     # calculate shift to center y axis on centerline
         scale = 1000.0 / 10.0**(ceil(np.log10(ymax - ymin)))    # calculate scaling factor for pixel == 0.1mm
         path = path.translated(complex(-xshift, -ymin))         # complex translation vector
-        path = path.scaled(scale)                               # scale path to 10 pixels/mm
+        path = path.scaled(scale)                               # scale path to 10 pixels/mm (curves get detached)
+        for ix, seg in enumerate(path[:-1]):
+            seg.end = path[ix+1].start                          # reattach curves so path.iscontinuous()
+        path[-1].end = path[0].start
 
         self.scan_path = path
         self.scan_attributes = attributes
-        self.scan_svg_attributes = svg_attributes   # XXX Seems not to like svg version of 1.0
-        
-    def metrics_from_scan(self):
-        """Use properties of a Viola to establish bout location and widths, corner locations, etc."""
-        #disvg([path], 'g')
-        #quit()
-        #del(viola.scan_path[:550])
-        #del(viola.scan_path[3:])
+        self.scan_svg_attributes = svg_attributes               # XXX Seems not to like svg version of 1.0
+        self.scan_bbox = path.bbox()
 
-        prev = "X"
-        extrema = []
-        for ix, seg in enumerate(self.scan_path):
-            # do we have a segment of interest based upon:
-            #    1. A change of tangent sign in the x-axis? (vertical tangent!)
+    def scan_compress(self, arc_thresh=2.5):
+        cpath = Path()
+        path = self.scan_path
+        ix = 0
+        p0 = c1 = c2 = p1 = None
+        arclen = 0.0
+        while ix < len(path):
+            # add a segment to combine
+            if isinstance(path[ix], CubicBezier):
+                if p0 is None:
+                    ix0 = ix
+                    p0 = complex(path[ix].start)
+                    c1 = complex(path[ix].control1)
 
-            # start by looking at the two end points
-            #dx = self.scan_path[0].end.real - self.scan_path[0].start.real
-            #dy = self.scan_path[0].end.imag - self.scan_path[0].start.imag
+                # add on the segments arc length
+                arclen += path[ix].length()
 
-            pt = seg.unit_tangent(0.5)
-            pprev = prev
-            if isinstance(seg, CubicBezier):
-                if (pt.real >= 0) and (pt.imag > 0) and prev != "1":
-                    prev = "1"
-                if (pt.real < 0) and (pt.imag >= 0) and prev != "2":
-                    prev = "2"
-                if (pt.real < 0) and (pt.imag < 0) and prev != "3":
-                    prev = "3"
-                if (pt.real >= 0) and (pt.imag < 0) and prev != "4":
-                    prev = "4"
-
-                #if prev != pprev:
-                if True:
-                    #print seg
-                    #print [p.real for p in seg]
-                    t_min, t_max = bez_extrema_t([p.real for p in seg])
-                    p_min = seg.point(t_min)
-                    p_max = seg.point(t_max)
-                    if p_min.real <= 0:
-                        extreme = p_min
-                        extreme_t = t_min
-                    else:
-                        extreme = p_max
-                        extreme_t = t_max
-
-                    extrema.append((ix, extreme_t, extreme.real, extreme.imag))
+                # determine if sufficent arc length has been achieved, or end of path reached
+                if (arclen > arc_thresh) or (ix == len(path) - 1):
+                    ix1 = ix
+                    p1 = complex(path[ix].end)
+                    c2 = complex(path[ix].control2)
+            else:
+                # we have something other than a CubicBezier
+                if p0 is not None:
+                    # but we started CubicBezier segment to combine
+                    #     case 1: we have only one bezier segment
+                    #             so we just set ix1 = ix0 and trip to combine segment below
+                    #     case 2: we have a few previous bezier segments
+                    #             we can assume previous segment was final cubic (or
+                    #             the algorithm would have reset to no points)
                     
-                #print ix, tuple(np.subtract((extreme.real, extreme.imag),(xshift,ymin))), seg.unit_tangent(extreme_t), seg.curvature(extreme_t)
-        extrema = sorted (extrema, reverse=True, key=lambda extreme: viola.scan_path[extreme[0]].curvature(extreme[1]))
-        extrema_x = []
-        extrema_y = []
-        for extreme in extrema:
-            extrema_x.append(extreme[2])
-            extrema_y.append(extreme[3])
-        return extrema_x, extrema_y
-        #print extrema
+                    ix1 = max(ix0, ix - 1)
+                    if ix1 > ix0:
+                        p1 = complex(path[ix1].end)
+                        c2 = complex(path[ix1].control2)
+                
+            # combine segments
+            if p1 is not None:
+                if ix0 != ix1:
+                    # combine the segments
+                    cpath.append(CubicBezier(p0,c1,c2,p1))
+                else:
+                    # this case catches the situation of a short CubicBezier followed by a non CubicBezier (e.g. Line)
+                    cpath.append(path[ix])
+                p0 = c1 = c2 = p1 = None
+                arclen = 0.0
 
-        #quit()
+            # add segment to compressed path if not a cubic bezier
+            if not isinstance(path[ix], CubicBezier):
+                cpath.append(path[ix])
+                # reset points to initial condition
+                p0 = c1 = c2 = p1 = None
 
-        #XXX start work here on feature extraction (vertical tangents, horizontal tangents, corners)
-        #for T in np.linspace(.321,.323,10):
-            #k,t = viola.scan_path.T2t(T)
-            #print k, T, t, (scale * (viola.scan_path[k].point(t).real - xshift), scale * (viola.scan_path[k].point(t).imag - ymin))
-            #print "Tangent: ", viola.scan_path[k].unit_tangent(t)
+            # keep consuming further segments
+            ix += 1
+        return cpath
+        
+    def geom_from_scan(self):
+        """Use properties of a Viola to establish bout location and widths, corner locations, etc."""
 
-        #k,t = viola.scan_path.T2t(.321)
-        return
+        # first we establish the centerline
+        xmin, xmax, ymin, ymax = self.scan_bbox
+        self.geom_centerline = Line(complex(0,0),complex(0,ymax - ymin))
+
+        # we need a vectorized function to find the tangent of a curve
+        vf = np.vectorize(lambda t:seg.unit_tangent(t))
+
+        bouts = []
+        corners = []
+        seg = self.scan_path[0]
+        t_prev = np.average(vf(np.linspace(0.0,1.0,10)))
+        for ix, seg in enumerate(self.scan_path):
+            # Points of interest:
+            #   1. Vertical lines (bouts) have curvature (0+-1j)
+            #   2. Horizontal lines (top & bottom) have curvature (+-1+0j)
+            #   3. Corners have segment to segment jump of curvature > .5
+
+            t_seg = np.average(vf(np.linspace(0.0,1.0,10)))
+            d_real = max(t_seg.real,t_prev.real) - min(t_seg.real,t_prev.real)
+            d_imag = max(t_seg.imag,t_prev.imag) - min(t_seg.imag,t_prev.imag)
+            if (abs(t_seg.real) < 0.1) and (abs(t_seg.imag) > .90):
+                bouts.append(ix)
+            if (d_real + d_imag > 0.8):
+                corners.append(ix)
+            t_prev = t_seg
+
+        top = self.geom_centerline.end.imag
+        # Find the upper left and right bout points in upper third of scan
+        start, end=self.extrema_in_range(bouts,top*2.0/3.0,top)
+        self.geom_bout_upper = Line(start,end)
+        self.geom_bout_upper_adj = Line(complex(start.real,np.average([start.imag,end.imag])),complex(end.real,np.average([start.imag,end.imag])))
+
+        # Find the lower left and right bout points
+        start, end=self.extrema_in_range(bouts,0.0,top*1.0/3.0)
+        self.geom_bout_lower = Line(start,end)
+        self.geom_bout_lower_adj = Line(complex(start.real,np.average([start.imag,end.imag])),complex(end.real,np.average([start.imag,end.imag])))
+
+        # Find the middle left and right bout points
+        start, end=self.extrema_in_range(bouts,top*1.0/3.0,top*2.0/3.0, reverse=True)
+        self.geom_bout_middle = Line(start,end)
+        self.geom_bout_middle_adj = Line(complex(start.real,np.average([start.imag,end.imag])),complex(end.real,np.average([start.imag,end.imag])))
+
+        # Find the lower corners
+        start, end=self.extrema_in_range(corners,self.geom_bout_lower_adj.start.imag,self.geom_bout_middle_adj.start.imag)
+        self.geom_corner_lower_left = start
+        self.geom_corner_lower_right = end
+
+        # Find the upper corners
+        start, end=self.extrema_in_range(corners,self.geom_bout_middle_adj.start.imag,self.geom_bout_upper_adj.start.imag)
+        self.geom_corner_upper_left = start
+        self.geom_corner_upper_right = end
+
+        return corners
 
     def plot (self, plot):
+        line = lambda seg,color: plot.plot([seg.start.real,seg.end.real],[seg.start.imag,seg.end.imag],color)
+        point = lambda pt,color: plot.plot([pt.real],[pt.imag],color)
+        line (self.geom_centerline,'r-')
+        line (self.geom_bout_upper,'r-')
+        line (self.geom_bout_lower,'r-')
+        line (self.geom_bout_middle,'r-')
+        line (self.geom_bout_upper_adj,'g-')
+        line (self.geom_bout_lower_adj,'g-')
+        line (self.geom_bout_middle_adj,'g-')
+        point (self.geom_corner_lower_left,'b^')
+        point (self.geom_corner_lower_right,'b^')
+        point (self.geom_corner_upper_left,'b^')
+        point (self.geom_corner_upper_right,'b^')
         for clothoid in self.clothoids:
             plot.plot(clothoid.sinVec(), clothoid.cosVec(), 'r-', linewidth=1)
         #XXX Need to calculate outline points from Bezier curves
         #plt.plot(*zip(*self.outline))
+
+    def extrema_in_range(self,segs,ymin,ymax,reverse=False):
+        min_point = complex(0,0)
+        max_point = complex(0,0)
+        if not reverse:
+            min_extreme = 0.0
+            max_extreme = 0.0
+        else:
+            min_extreme = -1.0e99   # a small number
+            max_extreme = 1.0e99    # a big number
+
+        for ix in segs:
+            seg = self.scan_path[ix]
+            if seg.start.imag > ymin and seg.start.imag < ymax:
+                t_min, t_max = bez_extrema_t(seg)
+                p_min = seg.point(t_min)
+                p_max = seg.point(t_max)
+                if not reverse:
+                    if p_min.real < min_extreme:
+                        min_point = p_min
+                        min_extreme = p_min.real
+                    if p_max.real > max_extreme:
+                        max_point = p_max
+                        max_extreme = p_max.real
+                else:
+                    if (p_min.real < 0) and (p_min.real > min_extreme):
+                        min_point = seg.point(t_min)
+                        min_extreme = seg.point(t_min).real
+                    if (p_max.real > 0) and (p_max.real < max_extreme):
+                        max_point = p_max
+                        max_extreme = p_max.real
+        return min_point, max_point
 
     # XXX add reflection
     # def reflect(self):
@@ -197,11 +324,11 @@ class Curve(object):
             else:
                 self.curve.append((x,y))
     
-def bez_extrema_t(p):
+def bez_extrema_t(b):
     """returns the minimum and maximum for any real cubic bezier"""
     local_extremizers = [0, 1]
-    if len(p) == 4:  # cubic case
-        a = [p.real for p in p]
+    if len(b) == 4:  # cubic case
+        a = [b.real for b in b]
         denom = a[0] - 3*a[1] + 3*a[2] - a[3]
         if denom != 0:
             delta = a[1]**2 - (a[0] + a[1])*a[2] + a[2]**2 + (a[0] - a[1])*a[3]
@@ -254,7 +381,7 @@ def bez_extrema_t(p):
 def scan_to_nodes(path):
     x = []
     y = []
-    for t in np.linspace(0.0,1.0,1000):
+    for t in np.linspace(0.0,1.0,10000):
         x.append(path.point(t).real)
         y.append(path.point(t).imag)
     return x,y
@@ -265,21 +392,34 @@ def scan_to_nodes(path):
 with open("salo.json", 'rb') as f:
     viola = Viola.from_json(f.read())
 
-viola.scan("clean.png")
+viola.scan("salo_contours.png")
 
-x,y = scan_to_nodes(viola.scan_path)
+#spath = smoothed_path(viola.scan_path, maxjointsize=100)
+#print "len path:", len(viola.scan_path)
+#print "kinks orig:", len(kinks(viola.scan_path))
+#print "kinks spath:", len(kinks(spath))
+#print "len spath:", len(spath)
+cpath = viola.scan_compress(5.0)
+#print "len cpath", len(cpath)
+
+path_orig = viola.scan_path
+viola.scan_path = cpath
+
+extrema = viola.geom_from_scan()
+
+#x,y = scan_to_nodes(viola.scan_path)
 
 plt.figure(figsize=(6,8.4))
 plt.axis([-150,150,0,420])
-plt.plot(x,y,'r-')
 
-x,y = viola.metrics_from_scan()
-plt.plot (x,y, 'bo', ms=2.0)
+for path, color in zip([path_orig, cpath],['b-','r-']):
+    for seg in path:
+        x,y = zip(*[(seg.point(t).real,seg.point(t).imag) for t in np.linspace(0.0,1.0,10)])
+        plt.plot(x,y,color)
 
 viola.plot(plt)
 
 plt.show(block=False)
-
 raw_input('<cr> to close program ->')
 
 plt.close()

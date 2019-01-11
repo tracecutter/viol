@@ -1,3 +1,10 @@
+Curves
+	Euler/Clothoid/Fresnel
+	Cubic Bezier
+	Sigmoid
+	Catenary
+Meshing algorithm
+	generate profiles from existing profiles and outlines
 Prep Work
 	implement outline cropping
 	prototype error "cost" function

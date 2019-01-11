@@ -1,3 +1,87 @@
+#a clunky way to plot a segment
+#x = []
+#y = []
+#for t in np.linspace(0.0,1.0,10):
+#    x.append(seg.point(t).real)
+#    y.append(seg.point(t).imag)
+
+#plt.plot(x,y,'r-', linewidth=2.0)
+
+#x,y = scan_to_nodes(cpath)
+#plt.plot(x,y,'b-', linewidth=.5)
+
+#plt.show(block=True)
+#quit()
+
+# ploting a point
+#plt.plot (x,y, 'bo', ms=2.0)
+
+# computing average curvature
+#t_vec = np.array(np.linspace(0.0,1.0,10))
+#vf = np.vectorize(lambda t:seg.curvature(t))
+#print ix, np.average(vf(t_vec))
+
+# incremental drawing
+#plt.draw()
+#plt.pause(.1)
+#plt.show(block=False)
+#raw_input('<cr> next segment->')
+
+        #disvg([path], 'g')
+        #quit()
+        #del(viola.scan_path[:550])
+        #del(viola.scan_path[3:])
+            if (pt.imag > 0) and isinstance(seg, CubicBezier) and (pt.real/pt.imag) < .05:
+                if False:
+                    if (pt.real >= 0) and (pt.imag > 0) and prev == "2":
+                        prev = "1"
+                    if (pt.real >= 0) and (pt.imag > 0) and prev == "4":
+                        prev = "1"
+                    if (pt.real < 0) and (pt.imag >= 0) and prev == "1":
+                        prev = "2"
+                    if (pt.real < 0) and (pt.imag < 0) and prev == "2":
+                        prev = "3"
+                    if (pt.real >= 0) and (pt.imag < 0) and prev == "3":
+                        prev = "4"
+                    if (pt.real >= 0) and (pt.imag < 0) and prev == "1":
+                        prev = "4"
+
+                #if prev != pprev:
+                if True:
+                    #print seg
+                    #print [p.real for p in seg]
+                    t_min, t_max = bez_extrema_t([p.real for p in seg])
+                    p_min = seg.point(t_min)
+                    p_max = seg.point(t_max)
+                    if p_min.real <= 0:
+                        extreme = p_min
+                        extreme_t = t_min
+                    else:
+                        extreme = p_max
+                        extreme_t = t_max
+
+                    extrema.append((ix, extreme_t, extreme.real, extreme.imag))
+                    
+                #print ix, tuple(np.subtract((extreme.real, extreme.imag),(xshift,ymin))), seg.unit_tangent(extreme_t), seg.curvature(extreme_t)
+        extrema = sorted (extrema, reverse=True, key=lambda extreme: viola.scan_path[extreme[0]].curvature(extreme[1]))
+        extrema_x = []
+        extrema_y = []
+        for extreme in extrema:
+            extrema_x.append(extreme[2])
+            extrema_y.append(extreme[3])
+        return extrema_x, extrema_y
+        #print extrema
+
+        #quit()
+
+        #XXX start work here on feature extraction (vertical tangents, horizontal tangents, corners)
+        #for T in np.linspace(.321,.323,10):
+            #k,t = viola.scan_path.T2t(T)
+            #print k, T, t, (scale * (viola.scan_path[k].point(t).real - xshift), scale * (viola.scan_path[k].point(t).imag - ymin))
+            #print "Tangent: ", viola.scan_path[k].unit_tangent(t)
+
+        #k,t = viola.scan_path.T2t(.321)
+
 try:
     newA=float(raw_input('New A: '))
 except ValueError:
