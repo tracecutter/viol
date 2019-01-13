@@ -93,13 +93,12 @@ class Viola(object):
 
         print "Paths Scanned:", len(paths)
 
-        profiles = []
-        for path in paths:
-            if len(path) > 20:
-                profiles.append(path)
-
-        print "Profiles", len(profiles)
-        quit()
+        #profiles = []
+        #for path in paths:
+        #    if len(path) > 20:
+        #        profiles.append(path)
+        #print "Profiles", len(profiles)
+        #quit()
         # assume here that the longest path is the outline we want, and rest is clutter
         path = paths[0]
         for p in paths:
@@ -132,6 +131,18 @@ class Viola(object):
         self.scan_svg_attributes = svg_attributes               # XXX Seems not to like svg version of 1.0
         self.scan_bbox = path.bbox()
 
+    def path_handles(self, path=None, mag=10.0):
+        handles = []
+        if path is None:
+            path = self.scan_path
+
+        for seg in path:
+            if isinstance(seg, CubicBezier):
+                vec = mag*(seg.control1 - seg.start)
+                vec2 = mag*(seg.end - seg.control2)
+                handles.append((seg.start,seg.start+vec))
+                handles.append((seg.end,seg.end+vec))
+        return handles
     def scan_compress(self, arc_thresh=2.5):
         cpath = Path()
         path = self.scan_path
@@ -156,6 +167,8 @@ class Viola(object):
                     c2 = complex(path[ix].control2)
             else:
                 # we have something other than a CubicBezier
+                #XXX maybe it's best to convert this segment to a Bezier? and keep compressing?
+                #XXX or do the conversion before we start compression
                 if p0 is not None:
                     # but we started CubicBezier segment to combine
                     #     case 1: we have only one bezier segment
@@ -392,7 +405,7 @@ def scan_to_nodes(path):
 with open("salo.json", 'rb') as f:
     viola = Viola.from_json(f.read())
 
-viola.scan("salo_contours.png")
+viola.scan("clean.png")
 
 #spath = smoothed_path(viola.scan_path, maxjointsize=100)
 #print "len path:", len(viola.scan_path)
@@ -405,6 +418,8 @@ cpath = viola.scan_compress(5.0)
 path_orig = viola.scan_path
 viola.scan_path = cpath
 
+#handles = viola.path_handles()
+
 extrema = viola.geom_from_scan()
 
 #x,y = scan_to_nodes(viola.scan_path)
@@ -412,12 +427,16 @@ extrema = viola.geom_from_scan()
 plt.figure(figsize=(6,8.4))
 plt.axis([-150,150,0,420])
 
-for path, color in zip([path_orig, cpath],['b-','r-']):
+for path, color in zip([path_orig, cpath],['g-','g-']):
     for seg in path:
         x,y = zip(*[(seg.point(t).real,seg.point(t).imag) for t in np.linspace(0.0,1.0,10)])
         plt.plot(x,y,color)
 
-viola.plot(plt)
+#for ix in range(0, len(handles)-1,2):
+    #plt.plot([handles[ix][0].real,handles[ix][1].real],[handles[ix][0].imag,handles[ix][1].imag],'r-')
+    #plt.plot([handles[ix+1][0].real,handles[ix+1][1].real],[handles[ix+1][0].imag,handles[ix+1][1].imag],'b-')
+
+#viola.plot(plt)
 
 plt.show(block=False)
 raw_input('<cr> to close program ->')
