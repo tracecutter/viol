@@ -4,6 +4,7 @@ import os
 import tempfile
 import json
 import jsonpickle
+import copy
 import numpy as np
 from scipy.special import fresnel
 from scipy.spatial import distance
@@ -143,6 +144,29 @@ class Viola(object):
                 handles.append((seg.start,seg.start+vec))
                 handles.append((seg.end,seg.end+vec))
         return handles
+
+    def path_smooth(self, path=None):
+        """Every adjoining segment starting handle and the previous segment ending handle is set to
+        the average of the two handles."""
+        if path is None:
+            path = self.scan_path
+
+        for ix,seg in enumerate(path):
+            if not isinstance(seg, CubicBezier):
+                p0 = complex(seg.start)
+                p1 = complex(seg.end)
+                c1 = p0 + .30 * (p1 - p0)/seg.length()      # put control1 handle 30% of the way to end point
+                c2 = p0 + .70 * (p1 - p0)/seg.length()      # put control2 handle 70% of the way to end point
+                path[ix] = CubicBezier(p0, c1, c2, p1)      # simply a straight line with control points in line
+                seg = path[ix]
+                
+            vec1 = path[ix-1].end - path[ix-1].control2
+            vec2 = seg.control1 - seg.start
+            new = vec1+vec2/2.0
+            path[ix].control1 = seg.start + new
+            path[ix-1].control2 = path[ix-1].end - new
+        return
+
     def scan_compress(self, arc_thresh=2.5):
         cpath = Path()
         path = self.scan_path
@@ -157,18 +181,28 @@ class Viola(object):
                     p0 = complex(path[ix].start)
                     c1 = complex(path[ix].control1)
 
+                # XXX Should we increase magnitude of p0->c1? for each additional segment?
+
                 # add on the segments arc length
                 arclen += path[ix].length()
 
-                # determine if sufficent arc length has been achieved, or end of path reached
-                if (arclen > arc_thresh) or (ix == len(path) - 1):
+                # XXX Check here if the next segment is big turn, in which case terminate
+                # calculate curvature relative to previous segment based on endpoint
+                opp = path[ix-1].end.real - path[ix-1].start.real
+                adj = path[ix-1].end.imag - path[ix-1].start.imag
+                hyp = (opp**2 + adj**2)**0.5
+                ang0 = np.rad2deg(np.arcsin(opp/hyp))
+                opp = path[ix].end.real - path[ix].start.real
+                adj = path[ix].end.imag - path[ix].start.imag
+                hyp = (opp**2 + adj**2)**0.5
+                ang1 = np.rad2deg(np.arcsin(opp/hyp))
+                # determine if sufficent arc length has been achieved, or big curve coming, or end of path reached
+                if (arclen > arc_thresh) or abs(ang0-ang1) > 30.0 or (ix == len(path) - 1):
                     ix1 = ix
                     p1 = complex(path[ix].end)
                     c2 = complex(path[ix].control2)
             else:
-                # we have something other than a CubicBezier
-                #XXX maybe it's best to convert this segment to a Bezier? and keep compressing?
-                #XXX or do the conversion before we start compression
+                # we have something other than a CubicBezier (note that smoothing will elimate lines if done first!)
                 if p0 is not None:
                     # but we started CubicBezier segment to combine
                     #     case 1: we have only one bezier segment
@@ -228,7 +262,7 @@ class Viola(object):
             d_imag = max(t_seg.imag,t_prev.imag) - min(t_seg.imag,t_prev.imag)
             if (abs(t_seg.real) < 0.1) and (abs(t_seg.imag) > .90):
                 bouts.append(ix)
-            if (d_real + d_imag > 0.8):
+            if (abs(d_real) + abs(d_imag) > 1.0):
                 corners.append(ix)
             t_prev = t_seg
 
@@ -258,7 +292,7 @@ class Viola(object):
         self.geom_corner_upper_left = start
         self.geom_corner_upper_right = end
 
-        return corners
+        return []
 
     def plot (self, plot):
         line = lambda seg,color: plot.plot([seg.start.real,seg.end.real],[seg.start.imag,seg.end.imag],color)
@@ -279,7 +313,7 @@ class Viola(object):
         #XXX Need to calculate outline points from Bezier curves
         #plt.plot(*zip(*self.outline))
 
-    def extrema_in_range(self,segs,ymin,ymax,reverse=False):
+    def extrema_in_range(self,seg_list,ymin,ymax,reverse=False):
         min_point = complex(0,0)
         max_point = complex(0,0)
         if not reverse:
@@ -289,8 +323,9 @@ class Viola(object):
             min_extreme = -1.0e99   # a small number
             max_extreme = 1.0e99    # a big number
 
-        for ix in segs:
+        for ix in seg_list:
             seg = self.scan_path[ix]
+            # only consider segments in the selected range
             if seg.start.imag > ymin and seg.start.imag < ymax:
                 t_min, t_max = bez_extrema_t(seg)
                 p_min = seg.point(t_min)
@@ -303,12 +338,16 @@ class Viola(object):
                         max_point = p_max
                         max_extreme = p_max.real
                 else:
-                    if (p_min.real < 0) and (p_min.real > min_extreme):
-                        min_point = seg.point(t_min)
-                        min_extreme = seg.point(t_min).real
-                    if (p_max.real > 0) and (p_max.real < max_extreme):
-                        max_point = p_max
-                        max_extreme = p_max.real
+                    # if we are left of centerline, we want to return p_max
+                    if seg.start.real < 0:
+                        if p_max.real > min_extreme:
+                            min_point = p_max
+                            min_extreme = p_max.real
+                    else:
+                    # otherwise we want to return p_min
+                        if p_min.real < max_extreme:
+                            max_point = p_min
+                            max_extreme = p_min.real
         return min_point, max_point
 
     # XXX add reflection
@@ -408,35 +447,37 @@ with open("salo.json", 'rb') as f:
 viola.scan("clean.png")
 
 #spath = smoothed_path(viola.scan_path, maxjointsize=100)
-#print "len path:", len(viola.scan_path)
-#print "kinks orig:", len(kinks(viola.scan_path))
-#print "kinks spath:", len(kinks(spath))
-#print "len spath:", len(spath)
-cpath = viola.scan_compress(5.0)
-#print "len cpath", len(cpath)
 
-path_orig = viola.scan_path
+print "len path:", len(viola.scan_path)
+print "kinks orig:", len(kinks(viola.scan_path))
+path_orig = copy.deepcopy(viola.scan_path)
+viola.path_smooth()
+cpath = viola.scan_compress(5.0)
 viola.scan_path = cpath
+path_compress = copy.deepcopy(cpath)
+print "kinks cpath:", len(kinks(cpath))
+print "len cpath:", len(cpath)
+#viola.path_smooth(cpath)
+#path_smooth = cpath
 
 #handles = viola.path_handles()
 
-extrema = viola.geom_from_scan()
+highlight = viola.geom_from_scan()
 
 #x,y = scan_to_nodes(viola.scan_path)
 
 plt.figure(figsize=(6,8.4))
 plt.axis([-150,150,0,420])
 
-for path, color in zip([path_orig, cpath],['g-','g-']):
-    for seg in path:
+for path, color in zip([path_orig, path_compress],['r-','b-']):
+    for ix,seg in enumerate(path):
         x,y = zip(*[(seg.point(t).real,seg.point(t).imag) for t in np.linspace(0.0,1.0,10)])
-        plt.plot(x,y,color)
+        if ix in highlight:
+            plt.plot(x,y,'g')
+        else:
+            plt.plot(x,y,color)
 
-#for ix in range(0, len(handles)-1,2):
-    #plt.plot([handles[ix][0].real,handles[ix][1].real],[handles[ix][0].imag,handles[ix][1].imag],'r-')
-    #plt.plot([handles[ix+1][0].real,handles[ix+1][1].real],[handles[ix+1][0].imag,handles[ix+1][1].imag],'b-')
-
-#viola.plot(plt)
+viola.plot(plt)
 
 plt.show(block=False)
 raw_input('<cr> to close program ->')

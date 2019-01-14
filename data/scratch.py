@@ -1,3 +1,12 @@
+#for ix in range(0, len(handles)-1,2):
+    #plt.plot([handles[ix][0].real,handles[ix][1].real],[handles[ix][0].imag,handles[ix][1].imag],'r-')
+    #plt.plot([handles[ix+1][0].real,handles[ix+1][1].real],[handles[ix+1][0].imag,handles[ix+1][1].imag],'b-')
+
+                #XXX Print the relative magnitude of handles to arc length
+                #c1_mag = complex(path[ix].control1) - complex(path[ix].start)
+                #c1_mag = (c1_mag.real**2 + c1_mag.imag**2)**.5
+                #print "C1 relative magnitude:", c1_mag, c1_mag/path[ix].length()
+
 #a clunky way to plot a segment
 #x = []
 #y = []
