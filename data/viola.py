@@ -269,6 +269,8 @@ class Viola(object):
         top = self.geom_centerline.end.imag
         # Find the upper left and right bout points in upper third of scan
         start, end=self.extrema_in_range(bouts,top*2.0/3.0,top)
+        print start, end
+        quit()
         self.geom_bout_upper = Line(start,end)
         self.geom_bout_upper_adj = Line(complex(start.real,np.average([start.imag,end.imag])),complex(end.real,np.average([start.imag,end.imag])))
 
@@ -314,8 +316,8 @@ class Viola(object):
         #plt.plot(*zip(*self.outline))
 
     def extrema_in_range(self,seg_list,ymin,ymax,reverse=False):
-        min_point = complex(0,0)
-        max_point = complex(0,0)
+        min_point = (0,0)
+        max_point = (0,0)
         if not reverse:
             min_extreme = 0.0
             max_extreme = 0.0
@@ -332,21 +334,21 @@ class Viola(object):
                 p_max = seg.point(t_max)
                 if not reverse:
                     if p_min.real < min_extreme:
-                        min_point = p_min
+                        min_point = (ix,t_min)
                         min_extreme = p_min.real
                     if p_max.real > max_extreme:
-                        max_point = p_max
+                        max_point = (ix,t_max)
                         max_extreme = p_max.real
                 else:
                     # if we are left of centerline, we want to return p_max
                     if seg.start.real < 0:
                         if p_max.real > min_extreme:
-                            min_point = p_max
+                            min_point = (ix,t_max)
                             min_extreme = p_max.real
                     else:
                     # otherwise we want to return p_min
                         if p_min.real < max_extreme:
-                            max_point = p_min
+                            max_point = (ix,t_min)
                             max_extreme = p_min.real
         return min_point, max_point
 
