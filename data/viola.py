@@ -477,6 +477,17 @@ for path, color in zip([path_orig, path_compress],['r-','b-']):
         else:
             plt.plot(x,y,color)
 
+nodes = np.asarray(zip(viola.clothoids[0].sinVec(),viola.clothoids[0].cosVec()))
+#start = timer()
+for point in c.curve:
+    dist_2 = np.sum((nodes - point)**2, axis=1)
+    index = np.argmin(dist_2)
+    a = np.array((viola.clothoids[0].sinVec()[index],  viola.clothoids[0].cosVec()[index]))
+    b = np.array(point)
+    plt.plot([a[0],b[0]], [a[1],b[1]], 'g-')
+    print index, point, (viola.clothoids[0].sinVec()[index], viola.clothoids[0].cosVec()[index]), np.linalg.norm(a-b)
+#print timer() - start
+
 viola.plot(plt)
 
 plt.show(block=False)
