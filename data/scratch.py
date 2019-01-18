@@ -1,3 +1,56 @@
+find nearest point to clothoid
+
+#nodes = np.asarray(zip(viola.clothoids[0].sinVec(),viola.clothoids[0].cosVec()))
+#start = timer()
+#for point in c.curve:
+#    dist_2 = np.sum((nodes - point)**2, axis=1)
+#    index = np.argmin(dist_2)
+#    a = np.array((viola.clothoids[0].sinVec()[index],  viola.clothoids[0].cosVec()[index]))
+#    b = np.array(point)
+#    plt.plot([a[0],b[0]], [a[1],b[1]], 'g-')
+#    print index, point, (viola.clothoids[0].sinVec()[index], viola.clothoids[0].cosVec()[index]), np.linalg.norm(a-b)
+#print timer() - start
+
+#plot multiple paths
+
+for path, color in zip([path_orig, path_compress],['r-','b-']):
+    for ix,seg in enumerate(path):
+        x,y = zip(*[(seg.point(t).real,seg.point(t).imag) for t in np.linspace(0.0,1.0,10)])
+        plt.plot(x,y,color)
+
+#print "len path:", len(viola.outline_path)
+#print "kinks orig:", len(kinks(viola.outline_path))
+#path_orig = copy.deepcopy(viola.outline_path)
+#viola.path_smooth()
+#cpath = viola.outline_path_compress(5.0)
+#viola.outline_path = cpath
+#path_compress = copy.deepcopy(cpath)
+#print "kinks cpath:", len(kinks(cpath))
+#print "len cpath:", len(cpath)
+#viola.path_smooth(cpath)
+#path_smooth = cpath
+
+#handles = viola.path_handles()
+#x,y = scan_to_nodes(viola.outline_path)
+        #t2p = lambda T: (self.outline_path.point(T).real,self.outline_path.point(T).imag)
+        #line = lambda x0,y0,x1,y1,color: plot.plot([x0,x1],[y0,y1],color)
+        #point = lambda x0,y0,color: plot.plot([x0],[y0],color)
+
+        #print self.outline_feature_turn_upper_left
+        #print self.outline_feature_turn_lower_left
+        #print self.outline_feature_turn_lower_right
+        #print self.outline_feature_turn_upper_right
+        #print self.outline_feature_bout_lower
+        #print self.outline_feature_corner_lower_left
+        #print self.outline_feature_corner_lower_right
+        #print self.outline_feature_bout_middle
+        #print self.outline_feature_corner_upper_left
+        #print self.outline_feature_corner_upper_right
+        #print self.outline_feature_bout_upper
+
+#computing a horizontal bout
+        self.geom_bout_upper_adj = Line(complex(start.real,np.average([start.imag,end.imag])),complex(end.real,np.average([start.imag,end.imag])))
+
 #for ix in range(0, len(handles)-1,2):
     #plt.plot([handles[ix][0].real,handles[ix][1].real],[handles[ix][0].imag,handles[ix][1].imag],'r-')
     #plt.plot([handles[ix+1][0].real,handles[ix+1][1].real],[handles[ix+1][0].imag,handles[ix+1][1].imag],'b-')
@@ -182,4 +235,18 @@ def junk():
             #    n /= -2.0
             #a += d
             #l = y
+
+Draw bezier handles
+    def path_handles(self, path=None, mag=10.0):
+        handles = []
+        if path is None:
+            path = self.outline_path
+
+        for seg in path:
+            if isinstance(seg, CubicBezier):
+                vec = mag*(seg.control1 - seg.start)
+                vec2 = mag*(seg.end - seg.control2)
+                handles.append((seg.start,seg.start+vec))
+                handles.append((seg.end,seg.end+vec))
+        return handles
 

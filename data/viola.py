@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import os
+from collections import namedtuple
 import tempfile
 import json
 import jsonpickle
@@ -8,6 +9,7 @@ import copy
 import numpy as np
 from scipy.special import fresnel
 from scipy.spatial import distance
+from scipy.optimize import minimize_scalar
 import matplotlib.pyplot as plt
 import math
 from math import ceil, log, sqrt
@@ -45,25 +47,105 @@ class Clothoid(object):
                 ((self.scale * cc * math.sin(self.rotation)) + \
                  (self.scale * ss * math.cos(self.rotation))) + \
                 self.origin[1])
+
+class POI(object):
+    """A point of interest."""
+    def __init__(self, path, T=0, p=None):
+        self.path = path
+        if p is not None:
+            self.closest_t(p)
+        else:
+            self.T = T
+
+    def __repr__(self):
+        return ('{}(T={:.2f},(x={:.2f},y={:.2f}))'.format(self.__class__.__name__, self.T, self.p().real, self.p().imag))
+
+    def p(self):
+        return self.path.point(self.T)
+
+    def x(self):
+        return self.path.point(self.T).real
+
+    def y(self):
+        return self.path.point(self.T).imag
     
+    def closest_t(self, p):
+        """Set the POI to point on the path closest to p."""
+        f = lambda t:np.linalg.norm(self.path.point(t)-p)
+        self.T = minimize_scalar(f, bounds=(0, 1.0), method='bounded', options={'xatol': 1e-5,'disp':0}).x
+        return self.T
+
+    def plot(self, plot, color='b^'):
+        plot.plot([self.x()],[self.y()],color)
+
+class Tangent(object):
+    """A unit tangent on a path at T"""
+    def __init__(self, path, T=0, mag=50):
+        self.start = path.point(T) - mag * path.unit_tangent(T)
+        self.end = path.point(T) + mag * path.unit_tangent(T)
+
+    def __repr__(self):
+        return ('{}(start={},end={})'.format(self.__class__.__name__, self.start, self.end))
+
+    def plot(self, plot, color='g-'):
+        plot.plot([self.start.real,self.end.real],[self.start.imag,self.end.imag],color)
+
+class Bout(object):
+    """A bout from the POI left to the POI right"""
+    def __init__(self, left, right):
+        self.left = left
+        self.right = right
+
+    def __repr__(self):
+        return ('{}(left={},right={})'.format(self.__class__.__name__, self.left, self.right))
+
+    def plot(self, plot, color='r-'):
+        plot.plot([self.left.x(),self.right.x()],[self.left.y(),self.left.y()],color)
+
+class Corner(object):
+    """A corner POI."""
+    def __init__(self, poi):
+        self.poi = poi
+
+    def __repr__(self):
+        return ('{}(poi={})'.format(self.__class__.__name__, self.poi))
+
+    def plot(self, plot, color='b^'):
+        self.poi.plot(plot, color)
+
+class CL:
+    """A centerline from the POI b(ottom) to the POI t(op)"""
+    def __init__(self, bot, top):
+        self.bot = bot
+        self.top = top
+
+    def __repr__(self):
+        return ('{}(bot={},top={})'.format(self.__class__.__name__, self.bot, self.top))
+
+    def plot(self, plot, color='r-'):
+        plot.plot([self.bot.x(),self.top.x()],[self.bot.y(),self.top.y()],color)
+
+
 class Viola(object):
+    """A generalized class of the geometry, features, and attributes of an instrument in the viol family."""
     def __init__(self):
         self.clothoids = None
-        self.scan_path = None
-        self.scan_attributes = None
-        self.scan_svg_attributes = None
-        self.scan_bbox = []
-        self.geom_bout_upper = None
-        self.geom_bout_upper_adj = None
-        self.geom_bout_middle = None
-        self.geom_bout_middle_adj = None
-        self.geom_bout_lower = None
-        self.geom_bout_lower_adj = None
-        self.geom_center_line = None
-        self.geom_corner_upper_left = None
-        self.geom_corner_lower_left = None
-        self.geom_corner_upper_right = None
-        self.geom_corner_lower_right = None
+        self.outline_path = None
+        self.outline_path_attributes = None
+        self.outline_pathsvg_attributes = None
+        self.outline_feature_bbox = []
+        self.outline_feature_bout_upper = None
+        self.outline_feature_bout_middle = None
+        self.outline_feature_bout_lower = None
+        self.outline_feature_center_line = None
+        self.outline_feature_corner_upper_left = None
+        self.outline_feature_corner_lower_left = None
+        self.outline_feature_corner_upper_right = None
+        self.outline_feature_corner_lower_right = None
+        self.outline_feature_turn_upper_left = None
+        self.outline_feature_turn_lower_left = None
+        self.outline_feature_turn_lower_right = None
+        self.outline_feature_turn_upper_right = None
 
     def scan(self, imageFile, dpi=300, threshold=205, despeckle=10):
         img = Image.open(imageFile)
@@ -91,8 +173,6 @@ class Viola(object):
         # parse the svg file to extract the cubic bezier curve paths
         paths, attributes, svg_attributes = svg2paths2(svg_tmp.name)
         svg_tmp.close()
-
-        print "Paths Scanned:", len(paths)
 
         #profiles = []
         #for path in paths:
@@ -127,29 +207,16 @@ class Viola(object):
             seg.end = path[ix+1].start                          # reattach curves so path.iscontinuous()
         path[-1].end = path[0].start
 
-        self.scan_path = path
-        self.scan_attributes = attributes
-        self.scan_svg_attributes = svg_attributes               # XXX Seems not to like svg version of 1.0
-        self.scan_bbox = path.bbox()
-
-    def path_handles(self, path=None, mag=10.0):
-        handles = []
-        if path is None:
-            path = self.scan_path
-
-        for seg in path:
-            if isinstance(seg, CubicBezier):
-                vec = mag*(seg.control1 - seg.start)
-                vec2 = mag*(seg.end - seg.control2)
-                handles.append((seg.start,seg.start+vec))
-                handles.append((seg.end,seg.end+vec))
-        return handles
+        self.outline_path = path
+        self.outline_path_attributes = attributes
+        self.outline_pathsvg_attributes = svg_attributes               # XXX Seems not to like svg version of 1.0
+        self.outline_feature_bbox = path.bbox()
 
     def path_smooth(self, path=None):
         """Every adjoining segment starting handle and the previous segment ending handle is set to
         the average of the two handles."""
         if path is None:
-            path = self.scan_path
+            path = self.outline_path
 
         for ix,seg in enumerate(path):
             if not isinstance(seg, CubicBezier):
@@ -165,11 +232,13 @@ class Viola(object):
             new = vec1+vec2/2.0
             path[ix].control1 = seg.start + new
             path[ix-1].control2 = path[ix-1].end - new
-        return
+        return path
 
-    def scan_compress(self, arc_thresh=2.5):
+    def outline_path_compress(self, path=None, arc_thresh=5.0):
+        if path is None:
+            path = self.outline_path
+
         cpath = Path()
-        path = self.scan_path
         ix = 0
         p0 = c1 = c2 = p1 = None
         arclen = 0.0
@@ -237,87 +306,117 @@ class Viola(object):
             ix += 1
         return cpath
         
-    def geom_from_scan(self):
+    def outline_path_features(self, bout_tol=0.1, corner_curve_tol=1.0):
         """Use properties of a Viola to establish bout location and widths, corner locations, etc."""
 
         # first we establish the centerline
-        xmin, xmax, ymin, ymax = self.scan_bbox
-        self.geom_centerline = Line(complex(0,0),complex(0,ymax - ymin))
+        xmin, xmax, ymin, ymax = self.outline_feature_bbox
+        path = self.outline_path
+        bot = POI(path, p=complex(0,0))
+        top = POI(path, p=complex(0,ymax-ymin))
+        self.outline_feature_centerline = CL(bot, top)
+
+        #XXX self.outline_feature_centerline.align()
 
         # we need a vectorized function to find the tangent of a curve
-        vf = np.vectorize(lambda t:seg.unit_tangent(t))
+        vec_f_tan = np.vectorize(lambda t:seg.unit_tangent(t))
 
         bouts = []
         corners = []
-        seg = self.scan_path[0]
-        t_prev = np.average(vf(np.linspace(0.0,1.0,10)))
-        for ix, seg in enumerate(self.scan_path):
+        seg = self.outline_path[0]
+        seg_prev_tan = np.average(vec_f_tan(np.linspace(0.0,1.0,10)))
+        for ix, seg in enumerate(self.outline_path):
             # Points of interest:
             #   1. Vertical lines (bouts) have curvature (0+-1j)
             #   2. Horizontal lines (top & bottom) have curvature (+-1+0j)
             #   3. Corners have segment to segment jump of curvature > .5
 
-            t_seg = np.average(vf(np.linspace(0.0,1.0,10)))
-            d_real = max(t_seg.real,t_prev.real) - min(t_seg.real,t_prev.real)
-            d_imag = max(t_seg.imag,t_prev.imag) - min(t_seg.imag,t_prev.imag)
-            if (abs(t_seg.real) < 0.1) and (abs(t_seg.imag) > .90):
+            seg_tan = np.average(vec_f_tan(np.linspace(0.0,1.0,10)))
+            d_real = max(seg_tan.real,seg_prev_tan.real) - min(seg_tan.real,seg_prev_tan.real)
+            d_imag = max(seg_tan.imag,seg_prev_tan.imag) - min(seg_tan.imag,seg_prev_tan.imag)
+            if (abs(seg_tan.real) < bout_tol) and (abs(seg_tan.imag) > (1.0 - bout_tol)):
                 bouts.append(ix)
-            if (abs(d_real) + abs(d_imag) > 1.0):
+            if (abs(d_real) + abs(d_imag) > corner_curve_tol):
                 corners.append(ix)
-            t_prev = t_seg
+            seg_prev_tan = seg_tan
 
-        top = self.geom_centerline.end.imag
+        top = self.outline_feature_centerline.top.y()
         # Find the upper left and right bout points in upper third of scan
         start, end=self.extrema_in_range(bouts,top*2.0/3.0,top)
-        print start, end
-        quit()
-        self.geom_bout_upper = Line(start,end)
-        self.geom_bout_upper_adj = Line(complex(start.real,np.average([start.imag,end.imag])),complex(end.real,np.average([start.imag,end.imag])))
+        self.outline_feature_bout_upper = Bout(POI(path,start),POI(path,end))
 
         # Find the lower left and right bout points
         start, end=self.extrema_in_range(bouts,0.0,top*1.0/3.0)
-        self.geom_bout_lower = Line(start,end)
-        self.geom_bout_lower_adj = Line(complex(start.real,np.average([start.imag,end.imag])),complex(end.real,np.average([start.imag,end.imag])))
+        self.outline_feature_bout_lower = Bout(POI(path,start),POI(path,end))
 
         # Find the middle left and right bout points
         start, end=self.extrema_in_range(bouts,top*1.0/3.0,top*2.0/3.0, reverse=True)
-        self.geom_bout_middle = Line(start,end)
-        self.geom_bout_middle_adj = Line(complex(start.real,np.average([start.imag,end.imag])),complex(end.real,np.average([start.imag,end.imag])))
+        self.outline_feature_bout_middle = Bout(POI(path,start),POI(path,end))
 
         # Find the lower corners
-        start, end=self.extrema_in_range(corners,self.geom_bout_lower_adj.start.imag,self.geom_bout_middle_adj.start.imag)
-        self.geom_corner_lower_left = start
-        self.geom_corner_lower_right = end
+        #XXX There could be residual segments above lower bout that are left/right of corner!
+        bot = self.outline_feature_bout_lower.left.y()
+        top = self.outline_feature_bout_middle.left.y()
+        start, end=self.extrema_in_range(corners,bot,top)
+        self.outline_feature_corner_lower_left = POI(path,start)
+        self.outline_feature_corner_lower_right = POI(path,end)
 
         # Find the upper corners
-        start, end=self.extrema_in_range(corners,self.geom_bout_middle_adj.start.imag,self.geom_bout_upper_adj.start.imag)
-        self.geom_corner_upper_left = start
-        self.geom_corner_upper_right = end
+        #XXX There could be residual segments below upper bout that are left/right of corner!
+        bot = self.outline_feature_bout_middle.left.y()
+        top = self.outline_feature_bout_upper.left.y()
+        start, end=self.extrema_in_range(corners,bot,top)
+        self.outline_feature_corner_upper_left = POI(path,start)
+        self.outline_feature_corner_upper_right = POI(path,end)
 
-        return []
+        f = lambda t:abs(path.unit_tangent(t).imag/path.unit_tangent(t).real)
 
-    def plot (self, plot):
-        line = lambda seg,color: plot.plot([seg.start.real,seg.end.real],[seg.start.imag,seg.end.imag],color)
-        point = lambda pt,color: plot.plot([pt.real],[pt.imag],color)
-        line (self.geom_centerline,'r-')
-        line (self.geom_bout_upper,'r-')
-        line (self.geom_bout_lower,'r-')
-        line (self.geom_bout_middle,'r-')
-        line (self.geom_bout_upper_adj,'g-')
-        line (self.geom_bout_lower_adj,'g-')
-        line (self.geom_bout_middle_adj,'g-')
-        point (self.geom_corner_lower_left,'b^')
-        point (self.geom_corner_lower_right,'b^')
-        point (self.geom_corner_upper_left,'b^')
-        point (self.geom_corner_upper_right,'b^')
+        T0 = self.outline_feature_bout_upper.left.T
+        T1 = self.outline_feature_corner_upper_left.T
+        T = minimize_scalar(f, bounds=(T0, T1), method='bounded', options={'xatol': 1e-5,'disp':0}).x
+        self.outline_feature_turn_upper_left = POI(path,T)
+        self.outline_feature_turn_ul_tangent = Tangent(path,T)
+
+        T0 = self.outline_feature_corner_lower_left.T
+        T1 = self.outline_feature_bout_lower.left.T
+        T = minimize_scalar(f, bounds=(T0, T1), method='bounded', options={'xatol': 1e-5,'disp':0}).x
+        self.outline_feature_turn_lower_left = POI(path,T)
+        self.outline_feature_turn_ll_tangent = Tangent(path,T)
+
+        T0 = self.outline_feature_bout_lower.right.T
+        T1 = self.outline_feature_corner_lower_right.T
+        T = minimize_scalar(f, bounds=(T0, T1), method='bounded', options={'xatol': 1e-5,'disp':0}).x
+        self.outline_feature_turn_lower_right = POI(path,T)
+        self.outline_feature_turn_lr_tangent = Tangent(path,T)
+
+        T0 = self.outline_feature_corner_upper_right.T
+        T1 = self.outline_feature_bout_upper.right.T
+        T = minimize_scalar(f, bounds=(T0, T1), method='bounded', options={'xatol': 1e-5,'disp':0}).x
+        self.outline_feature_turn_upper_right = POI(path,T)
+        self.outline_feature_turn_ur_tangent = Tangent(path,T)
+
+    def plot (self, plot=None):
+        if plot is None:
+            plt.figure(figsize=(6,8.4))
+            plt.axis([-150,150,0,420])
+            plot = plt
+        features = [(key) for key, value in self.__dict__.iteritems() if key.startswith("outline_feature")]
+        for feature in features:
+            try:
+                getattr(self, feature).plot(plot)
+            except AttributeError:
+                pass
+
         for clothoid in self.clothoids:
             plot.plot(clothoid.sinVec(), clothoid.cosVec(), 'r-', linewidth=1)
-        #XXX Need to calculate outline points from Bezier curves
-        #plt.plot(*zip(*self.outline))
+
+        x,y = zip(*[(self.outline_path.point(T).real,self.outline_path.point(T).imag) for T in np.linspace(0.0,1.0,5000)])
+        plot.plot(x,y,'b-')
+        return plot
 
     def extrema_in_range(self,seg_list,ymin,ymax,reverse=False):
-        min_point = (0,0)
-        max_point = (0,0)
+        min_point = complex(0,0)
+        max_point = complex(0,0)
         if not reverse:
             min_extreme = 0.0
             max_extreme = 0.0
@@ -326,7 +425,7 @@ class Viola(object):
             max_extreme = 1.0e99    # a big number
 
         for ix in seg_list:
-            seg = self.scan_path[ix]
+            seg = self.outline_path[ix]
             # only consider segments in the selected range
             if seg.start.imag > ymin and seg.start.imag < ymax:
                 t_min, t_max = bez_extrema_t(seg)
@@ -334,21 +433,21 @@ class Viola(object):
                 p_max = seg.point(t_max)
                 if not reverse:
                     if p_min.real < min_extreme:
-                        min_point = (ix,t_min)
+                        min_point = self.outline_path.t2T(ix,t_min)
                         min_extreme = p_min.real
                     if p_max.real > max_extreme:
-                        max_point = (ix,t_max)
+                        max_point = self.outline_path.t2T(ix,t_max)
                         max_extreme = p_max.real
                 else:
                     # if we are left of centerline, we want to return p_max
                     if seg.start.real < 0:
                         if p_max.real > min_extreme:
-                            min_point = (ix,t_max)
+                            min_point = self.outline_path.t2T(ix,t_max)
                             min_extreme = p_max.real
                     else:
                     # otherwise we want to return p_min
                         if p_min.real < max_extreme:
-                            max_point = (ix,t_min)
+                            max_point = self.outline_path.t2T(ix,t_min)
                             max_extreme = p_min.real
         return min_point, max_point
 
@@ -447,53 +546,10 @@ with open("salo.json", 'rb') as f:
     viola = Viola.from_json(f.read())
 
 viola.scan("clean.png")
+viola.outline_path = viola.path_smooth()
+viola.outline_path = viola.outline_path_compress()
+viola.outline_path_features()
+viola.plot().show(block=False)
 
-#spath = smoothed_path(viola.scan_path, maxjointsize=100)
-
-print "len path:", len(viola.scan_path)
-print "kinks orig:", len(kinks(viola.scan_path))
-path_orig = copy.deepcopy(viola.scan_path)
-viola.path_smooth()
-cpath = viola.scan_compress(5.0)
-viola.scan_path = cpath
-path_compress = copy.deepcopy(cpath)
-print "kinks cpath:", len(kinks(cpath))
-print "len cpath:", len(cpath)
-#viola.path_smooth(cpath)
-#path_smooth = cpath
-
-#handles = viola.path_handles()
-
-highlight = viola.geom_from_scan()
-
-#x,y = scan_to_nodes(viola.scan_path)
-
-plt.figure(figsize=(6,8.4))
-plt.axis([-150,150,0,420])
-
-for path, color in zip([path_orig, path_compress],['r-','b-']):
-    for ix,seg in enumerate(path):
-        x,y = zip(*[(seg.point(t).real,seg.point(t).imag) for t in np.linspace(0.0,1.0,10)])
-        if ix in highlight:
-            plt.plot(x,y,'g')
-        else:
-            plt.plot(x,y,color)
-
-nodes = np.asarray(zip(viola.clothoids[0].sinVec(),viola.clothoids[0].cosVec()))
-#start = timer()
-for point in c.curve:
-    dist_2 = np.sum((nodes - point)**2, axis=1)
-    index = np.argmin(dist_2)
-    a = np.array((viola.clothoids[0].sinVec()[index],  viola.clothoids[0].cosVec()[index]))
-    b = np.array(point)
-    plt.plot([a[0],b[0]], [a[1],b[1]], 'g-')
-    print index, point, (viola.clothoids[0].sinVec()[index], viola.clothoids[0].cosVec()[index]), np.linalg.norm(a-b)
-#print timer() - start
-
-viola.plot(plt)
-
-plt.show(block=False)
 raw_input('<cr> to close program ->')
-
 plt.close()
-
