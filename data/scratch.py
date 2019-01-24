@@ -1,15 +1,130 @@
-find nearest point to clothoid
+Slice out and plot a piece of a path in green
+#slice out a portion of the path
+path = path_slice(viola.outline_path,
+           viola.outline_feature_corner_lower_left.T,
+           viola.outline_feature_turn_lower_left.T)
 
-#nodes = np.asarray(zip(viola.clothoids[0].sinVec(),viola.clothoids[0].cosVec()))
-#start = timer()
-#for point in c.curve:
-#    dist_2 = np.sum((nodes - point)**2, axis=1)
-#    index = np.argmin(dist_2)
-#    a = np.array((viola.clothoids[0].sinVec()[index],  viola.clothoids[0].cosVec()[index]))
-#    b = np.array(point)
-#    plt.plot([a[0],b[0]], [a[1],b[1]], 'g-')
-#    print index, point, (viola.clothoids[0].sinVec()[index], viola.clothoids[0].cosVec()[index]), np.linalg.norm(a-b)
-#print timer() - start
+x,y = zip(*[(path.point(T).real,path.point(T).imag) for T in np.linspace(0.0,1.0,500)])
+plt.plot(x,y,'g-')
+
+
+Load a pickled Viola
+#with open("salo.json", 'rb') as f:
+#    viola = Viola.from_json(f.read())
+
+Digitize a path (the clunky way)
+def scan_to_nodes(path):
+    x = []
+    y = []
+    for t in np.linspace(0.0,1.0,10000):
+        x.append(path.point(t).real)
+        y.append(path.point(t).imag)
+    return x,y
+
+Examine the number of profiles found in scan
+#profiles = []
+#for path in paths:
+#    if len(path) > 20:
+#        profiles.append(path)
+#print "Profiles", len(profiles)
+#quit()
+
+Some experiments on graphing curvature with linear fits
+#t_vec = np.array(np.linspace(0.0,1.0,10))
+#phase = [cmath.phase(complex(math.sin(cmath.pi*T**2/2.0),math.cos(cmath.pi*T**2/2.0))) for T in t_vec]
+
+#z = np.polyfit(t_vec, phase, 1)
+#p = np.poly1d(z)
+#print z
+#print p
+
+#plt.figure(figsize=(12,6))
+#plt.axis([0,3.141,-cmath.pi,cmath.pi])
+#plt.axis([0,1.0,-cmath.pi,cmath.pi])
+#plt.axis([0,1.0,0,0.5])
+#plt.plot(ss, cc, 'r-', linewidth=1)
+#plt.plot(t_vec,c,'b-')
+#plt.plot(t_vec,phase,'b-')
+#plt.plot(t_vec,p(t_vec),'r-')
+
+#ss, cc = fresnel(t_vec)
+#t_vec = np.array(np.linspace(0.0,1.0,10))
+#phase = [cmath.phase(complex(math.sin(cmath.pi*T**2/2.0),math.cos(cmath.pi*T**2/2.0))) for T in t_vec]
+
+
+Find t for unit_tangent on Eulers Curve
+# find location t on Euler's Curve where the tangent is 45 degrees (note that this is also sin(45degrees)!
+# In normalized fresnel integral the form is (integral(sin((pi/2)*t**2)),integral(cos((pi/2)*t**2))
+# The unit vector on a normalized fresnel integral is (cos((pi/2)*t**2),sin((pi/2)*t**2))
+# In t = sqrt(2 * desired_phi/cmath.pi)
+# f = lambda t: abs(cmath.phase(complex(math.sin((cmath.pi/2.0)*t**2),math.cos((cmath.pi/2.0)*t**2)))-(cmath.pi/4.0))
+#t = minimize_scalar(f, bounds=(0, 1.0), method='bounded', options={'xatol': 1e-5,'disp':3}).x
+#print t, fresnel(t), 2**-0.5
+
+#print math.degrees(cmath.phase(viola.outline_feature_turn_lower_left.tangent()))
+
+#plot.plot(clothoid.sinVec(), clothoid.cosVec(), 'r-', linewidth=1)
+
+#c = [(path.curvature(T)) for T in t_vec]
+#phase = [cmath.phase(path.unit_tangent(T)) for T in t_vec]
+#phase = [cmath.phase(path.point(T+.01) - path.point(T)) for T in t_vec]
+
+# normalization of fresnel integrals
+# In a normalized fresnel integral, phi = t**2
+    def sinVec(self):
+        t = np.linspace(0,2.1, 1000)
+        ss, cc = fresnel(t/(math.sqrt(math.pi/2)))
+        ss = ss * math.sqrt(math.pi / 2)
+        cc = cc * math.sqrt(math.pi / 2)
+        return (self.hflip * \
+                ((self.scale * cc * math.cos(self.rotation)) - \
+                 (self.scale * ss * math.sin(self.rotation))) + \
+                self.origin[0])
+
+    def cosVec(self):
+        t = np.linspace(0,2.1, 1000)
+        ss, cc = fresnel(t/(math.sqrt(math.pi/2)))
+        ss = ss * math.sqrt(math.pi / 2)
+        cc = cc * math.sqrt(math.pi / 2)
+        return (self.vflip * \
+                ((self.scale * cc * math.sin(self.rotation)) + \
+                 (self.scale * ss * math.cos(self.rotation))) + \
+                self.origin[1])
+#an attempt to find t at unit_tangent angle
+t = math.asin(cmath.pi/4)**0.5
+print t, fresnel(t)
+quit()
+
+# verify t and arclen grow proportionally
+alen = 0.0
+t_vec2 = [0]
+y_vec2 = [0]
+for seg in path:
+    alen = alen + seg.length()
+    t_vec2.append(path.t2T(seg,1.0))
+    y_vec2.append(cmath.phase(seg.unit_tangent(1.0)))
+    #y_vec2.append(alen/path.length())
+
+#slice out a portion of the path
+path = path_slice(viola.outline_path,
+           viola.outline_feature_turn_lower_left.T,
+           viola.outline_feature_centerline.bot.T)
+
+x,y = zip(*[(path.point(T).real,path.point(T).imag) for T in np.linspace(0.0,1.0,5000)])
+plt.plot(x,y,'g-')
+
+
+#find nearest point to clothoid
+nodes = np.asarray(zip(viola.clothoids[0].sinVec(),viola.clothoids[0].cosVec()))
+start = timer()
+for point in c.curve:
+    dist_2 = np.sum((nodes - point)**2, axis=1)
+    index = np.argmin(dist_2)
+    a = np.array((viola.clothoids[0].sinVec()[index],  viola.clothoids[0].cosVec()[index]))
+    b = np.array(point)
+    plt.plot([a[0],b[0]], [a[1],b[1]], 'g-')
+    print index, point, (viola.clothoids[0].sinVec()[index], viola.clothoids[0].cosVec()[index]), np.linalg.norm(a-b)
+print timer() - start
 
 #plot multiple paths
 
