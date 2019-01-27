@@ -1,3 +1,45 @@
+    
+
+    for t in np.linspace(T0,T1,100):
+        print t, f(t, phi)
+    print T0, T1, f(T0,phi), f(T1,phi)
+
+    """Find the segment where the slope exists within it based on segment end points
+    this avoids being tricked by a local minima in another segment."""
+    if phi is None:
+        phi = cmath.pi/4.0
+
+    # first we find the segment with desired slope in it (zero crossing)
+    f = lambda ix,slope:cmath.phase(path[int(ix)].end - path[int(ix)].start) - slope
+    ix0,t0 = path.T2t(T0)
+    ix1,t1 = path.T2t(T1)
+    ix_zc = int(brentq(f, ix0, ix1, args=(phi), xtol=1.0))
+
+    print ix_zc
+    #for ix in range(ix0,ix1):
+        #print ix, f(ix,phi)
+
+    # now we search the zero crossing segment for the precise point where slope is phi
+    f = lambda t,slope:cmath.phase(path.unit_tangent(t))-slope
+    
+
+    T0 = path.t2T(ix_zc-3,0.0) + 0.01
+    T1 = path.t2T(ix_zc+1,1.0)
+    for t in np.linspace(T0,T1,20):
+        print f(t, phi)
+    quit()
+    print cmath.phase(path.unit_tangent(T0))
+    print cmath.phase(path.unit_tangent(T1))
+    print T0, T1, f(T0,phi), f(T1,phi)
+    T = brentq(f, T0, T1, args=(phi))
+    return T
+    T = minimize_scalar(f, args=(phi),bounds=(T0, T1), method='bounded', options={'xatol': 1e-10,'disp':3}).x
+
+    print ix_zc, rr
+    for ix in range(ix0,ix1):
+        print ix, f(ix,phi)
+    quit()
+
 Slice out and plot a piece of a path in green
 #slice out a portion of the path
 path = path_slice(viola.outline_path,
