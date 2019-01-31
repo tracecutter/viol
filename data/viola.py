@@ -27,7 +27,7 @@ from time import sleep
 
 
 class Clothoid(object):
-    def __init__(self, T=2.2, scale=1, rotation=0, origin=(0,0), hflip=1, vflip=1):
+    def __init__(self, scale=1, rotation=0, origin=(0,0), hflip=1, vflip=1, T=2.1):
         self.T          = T
         self.scale      = scale
         self.rotation   = rotation
@@ -177,15 +177,16 @@ class Corner(object):
 
 class CL(object):
     """A centerline from the POI b(ottom) to the POI t(op)"""
-    def __init__(self, bot, top):
+    def __init__(self, bot, top_left, top_right):
         self.bot = bot
-        self.top = top
+        self.top_left = top_left
+        self.top_right = top_right
 
     def __repr__(self):
         return ('{}(bot={},top={})'.format(self.__class__.__name__, self.bot, self.top))
 
     def plot(self, plot, color='r-'):
-        plot.plot([self.bot.x(),self.top.x()],[self.bot.y(),self.top.y()],color)
+        plot.plot([self.bot.x(),self.top_left.x()],[self.bot.y(),self.top_left.y()],color)
 
 
 class Viola(object):
@@ -209,6 +210,18 @@ class Viola(object):
         self.outline_feature_turn_lower_left = None
         self.outline_feature_turn_lower_right = None
         self.outline_feature_turn_upper_right = None
+        self.outline_feature_turn_ul_tangent = None
+        self.outline_feature_turn_ll_tangent = None
+        self.outline_feature_turn_lr_tangent = None
+        self.outline_feature_turn_ur_tangent = None
+        self.outline_feature_45_upper_left = None
+        self.outline_feature_45_lower_left = None
+        self.outline_feature_45_lower_right = None
+        self.outline_feature_45_upper_right = None
+        self.outline_feature_45_upper_left_tangent = None
+        self.outline_feature_45_lower_left_tangent = None
+        self.outline_feature_45_lower_right_tangent = None
+        self.outline_feature_45_upper_right_tangent = None
 
     def scan(self, imageFile, dpi=300, threshold=205, despeckle=10):
         img = Image.open(imageFile)
@@ -377,8 +390,11 @@ class Viola(object):
         xmin, xmax, ymin, ymax = self.outline_feature_bbox
         path = self.outline_path
         bot = POI(path, p=complex(0,0))
-        top = POI(path, p=complex(0,ymax-ymin))
-        self.outline_feature_centerline = CL(bot, top)
+        #top_left = POI(path, p=complex(0,ymax-ymin))
+        #top_right = POI(path, p=complex(0,ymax-ymin))
+        top_left = POI(path, T=0.0)
+        top_right = POI(path, T=1.0)
+        self.outline_feature_centerline = CL(bot, top_left, top_right)
 
         # we need a vectorized function to find the tangent of a curve
         vec_f_tan = np.vectorize(lambda t:seg.unit_tangent(t))
@@ -409,7 +425,7 @@ class Viola(object):
         # Now we bracket our search to determine the real bouts
 
         #XXX there is an assumption of bouts laying within the viol terciles
-        top = self.outline_feature_centerline.top.y()
+        top = self.outline_feature_centerline.top_left.y()
         # Find the upper left and right bout points in upper third of scan
         start, end=self.extrema_in_range(bouts,top*2.0/3.0,top)
         self.outline_feature_bout_upper = Bout(POI(path,start),POI(path,end))
@@ -489,21 +505,53 @@ class Viola(object):
         self.outline_feature_45_lower_right_tangent = Tangent(path,T)
 
         T0 = self.outline_feature_bout_upper.right.T + 0.015
-        T1 = self.outline_feature_centerline.top.T - 0.015
+        T1 = self.outline_feature_centerline.top_right.T - 0.015
         T = path_find_slope(path, T0, T1, phi=3*cmath.pi/4.0)
         self.outline_feature_45_upper_right = POI(path,T)
         self.outline_feature_45_upper_right_tangent = Tangent(path,T)
 
     def outline_clothoids_find(self):
+        """Experimental"""
+        # calculate first clothoid from top center to 45 degrees
+        bpath = path_slice(self.outline_path, 0.0, self.outline_feature_45_upper_left.T)
+        
+        phi_p0 = cmath.phase(self.outline_feature_45_upper_left.tangent())
+        phi_p1 = -cmath.pi
+        
+        origin = (self.outline_feature_centerline.top_left.x(),self.outline_feature_centerline.top_left.y())
+        hflip = -1
+        vflip = -1
+        scale = (bpath.length()/math.sqrt(0.5)) * 1.0875
+        print "scale:", scale
+
+        # calculate delta phi
+        phi = phase_delta_min(phi_p0,phi_p1)
+
+        delta_t = math.sqrt(((0 + phi) * 2)/cmath.pi)
+        # use an unrotated unit clothoid to generate a set of clothoid snips scaled to same arc length
+        unit_cl = Clothoid(1.0, cmath.pi, origin, hflip, vflip)
+        # for a set of new starting t points on clothoid
+        for t_beg in np.linspace(0,cmath.pi/3,5):
+            # calculate phi at t_beg
+            phi_beg = cmath.phase(unit_cl.tangent(t_beg))
+
+            # calculate t_end
+            t_end = math.sqrt(((phi_beg + phi) * 2)/cmath.pi)
+            print delta_t, (t_end - t_beg)/delta_t
+
+            cl = Clothoid(scale, rotation=-phi_beg, origin, hflip, vflip, t_beg=t_beg, t_end=t_end)
+            self.outline_clothoids.append(cl)
+            #print t_beg, t_end, phi, phi_beg, phi_beg + phi
+
+    def outline_clothoids_find2(self):
         """Define a set of clothoids based on path features."""
         # calculate first clothoid from top center to 45 degrees
         bpath = path_slice(self.outline_path, 0.0, self.outline_feature_45_upper_left.T)
         
         p_45 = self.outline_feature_45_upper_left.p()
-        p_cl = self.outline_feature_centerline.top.p()
+        p_cl = self.outline_feature_centerline.top_left.p()
         
-        T = 2.2
-        origin = (self.outline_feature_centerline.top.x(),self.outline_feature_centerline.top.y())
+        origin = (self.outline_feature_centerline.top_left.x(),self.outline_feature_centerline.top_left.y())
         hflip = -1
         vflip = -1
         scale = (bpath.length()/math.sqrt(0.5)) * 1.0875
@@ -511,23 +559,20 @@ class Viola(object):
 
         rotation = -0.2
         for i in range(0,10):
-            print i
-            cl = Clothoid(T,scale, rotation, origin, hflip, vflip)
+            cl = Clothoid(scale, rotation, origin, hflip, vflip)
             t = cl.closest_t(p_45)
             ph1 = cmath.phase(p_45 - p_cl)
             ph2 = cmath.phase(cl.p(t) - p_cl)
-            print "p_45:", p_45
-            print "t, p(t):", t, cl.p(t)
-            print "ph1, ph2, delta, min_delta_degrees:", ph1, ph2, ph1 - ph2, phase_delta_min(ph1, ph2)
-            print "rotation", rotation, math.degrees(rotation)
-            #self.outline_guesses.append(Point(cl.x(t),cl.y(t)))
-            #self.outline_clothoids.append(cl)
+            print "i, ph1, ph2, delta, rotation", i, ph1, ph2, ph1 - ph2, math.degrees(rotation)
+            self.outline_guesses.append(Point(cl.x(t),cl.y(t)))
+            self.outline_clothoids.append(cl)
             rotation = rotation + (ph1 - ph2)
 
         path_compare(self.outline_path, 0.0, self.outline_feature_45_upper_left.T, cl, 0.0, t, nodes=10)
 
-        print "tangent", math.degrees(cmath.phase(cl.tangent(t)))
+        #print "tangent", math.degrees(cmath.phase(cl.tangent(t)))
         self.outline_clothoids.append(cl)
+        
 
     def plot (self, plot=None):
         """Plot a viola using matplotlib.  Note this does not display the plot."""
@@ -636,6 +681,11 @@ def phase_delta_min(p1, p2):
     n2 = (p2+cmath.pi*2)%(cmath.pi*2.0)
     return min(abs(n1-n2),abs(n2-n1))
 
+def twist_calc(p0,p1):
+    return
+    #print p0,p1
+    #print p1 - p0, (math.degrees((cmath.phase(p1 - p0)+(cmath.pi))) + 180)%360
+
 def bez_extrema_t(b):
     """Returns the minimum and maximum t values for the real axis (x) of a cubic bezier."""
     local_extremizers = [0, 1]
@@ -693,9 +743,9 @@ def path_compare(path, path_t0, path_t1, clothoid, clothoid_t0, clothoid_t1, nod
     tvec_clothoid = np.linspace(clothoid_t0,clothoid_t1,nodes)
     bez = np.array([path.point(t) for t in tvec_path])
     clo = np.array([clothoid.p(t) for t in tvec_clothoid])
-    print bez
-    print clo
-    print bez - clo
+    #print bez
+    #print clo
+    #print bez - clo
 
 # Main entry point
 #
