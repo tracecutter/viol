@@ -27,24 +27,20 @@ from time import sleep
 
 
 class Clothoid(object):
-    def __init__(self, scale=1, rotation=0, origin=(0,0), hflip=1, vflip=1, T=2.1, t_beg=0.0, t_end=2.1):
+    def __init__(self, scale=1, rotation=0, origin=(0,0), hflip=1, vflip=1, T=2.1):
         self.T          = T
         self.scale      = scale
         self.rotation   = rotation
         self.origin     = origin
         self.hflip      = hflip
         self.vflip      = vflip
-        self.t_beg      = t_beg
-        self.t_end      = t_end
-        self.origin = (self.origin[0] - (self.p(t_beg) - self.p(0)).real, self.origin[1] - (self.p(t_beg) - self.p(0)).imag)
 
     def __repr__(self):
         fmt = '{}(scale={:.2f},rotation={:.2f},origin=({:.2f},{:.2f}),hflip={:1d},vflip={:1d})'
         return fmt.format(self.__class__.__name__, self.scale, self.rotation, self.origin[0], self.origin[1], self.hflip, self.vflip)
 
     def sinVec(self):
-        #t = np.linspace(0, self.T, 1000)
-        t = np.linspace(self.t_beg, self.t_end, 1000)
+        t = np.linspace(0, self.T, 1000)
         ss, cc = fresnel(t)
         return (self.hflip * \
                 ((self.scale * cc * math.cos(self.rotation)) - \
@@ -52,7 +48,7 @@ class Clothoid(object):
                 self.origin[0])
 
     def cosVec(self):
-        t = np.linspace(self.t_beg, self.t_end, 1000)
+        t = np.linspace(0, self.T, 1000)
         ss, cc = fresnel(t)
         return (self.vflip * \
                 ((self.scale * cc * math.sin(self.rotation)) + \
@@ -515,47 +511,6 @@ class Viola(object):
         self.outline_feature_45_upper_right_tangent = Tangent(path,T)
 
     def outline_clothoids_find(self):
-        """Experimental"""
-        # calculate first clothoid from top center to 45 degrees
-        bpath = path_slice(self.outline_path, 0.0, self.outline_feature_45_upper_left.T)
-        
-        phi_p0 = cmath.phase(self.outline_feature_45_upper_left.tangent())
-        phi_p1 = -cmath.pi
-        
-        origin = (self.outline_feature_centerline.top_left.x(),self.outline_feature_centerline.top_left.y())
-        hflip = -1
-        vflip = -1
-        scale = (bpath.length()/math.sqrt(0.5)) * 1.0875
-        print "scale:", scale
-
-        # calculate delta phi
-        phi = phase_delta_min(phi_p0,phi_p1)
-
-        delta_t = math.sqrt(((0 + phi) * 2)/cmath.pi)
-        # use an unrotated unit clothoid to generate a set of clothoid snips scaled to same arc length
-        unit_cl = Clothoid(1.0, cmath.pi, origin, hflip, vflip)
-
-        norm_scale = scale
-        rotten = [0, -0.18, -0.55, -1.15, -1.9]
-        ix = 0
-        # for a set of new starting t points on clothoid
-        for t_beg in np.linspace(0,cmath.pi/3,5):
-            # calculate phi at t_beg
-            phi_beg = cmath.phase(unit_cl.tangent(t_beg))
-
-            # calculate t_end
-            t_end = math.sqrt(((phi_beg + phi) * 2)/cmath.pi)
-            norm_scale = scale / ((t_end - t_beg)/delta_t)
-
-            #rotation = -phi_beg
-            rotation = rotten[ix]
-            ix = ix + 1
-            print rotation
-            cl = Clothoid(norm_scale, rotation, origin, hflip, vflip, t_beg=t_beg, t_end=t_end)
-            self.outline_clothoids.append(cl)
-            #print t_beg, t_end, phi, phi_beg, phi_beg + phi
-
-    def outline_clothoids_find2(self):
         """Define a set of clothoids based on path features."""
         # calculate first clothoid from top center to 45 degrees
         bpath = path_slice(self.outline_path, 0.0, self.outline_feature_45_upper_left.T)

@@ -19,35 +19,32 @@
         ]
 
         # iterate over every clothoid to construct
-        #for c in clist:
-        #    p0,p1 = [c[0].p(),c[1].p()] 
+        for points in clist:
+            p0,p1 = [points[0].p(),points[1].p()] 
             # calculate transform based on entry angle and cw/ccw twist
-        #    twist_calc(p0,p1)
-        #quit()
-        bpath = path_slice(self.outline_path, 0.0, self.outline_feature_45_upper_left.T)
-        p0,p1 = [clist[0][0],clist[0][1]] 
+            scale, rotation, hflip, vflip = twist_calc(p0,p1)
+
+        # calculate the scale
+        arclen = self.outline_path.length(T0=0, T1=self.outline_feature_45_upper_left.T)
+        scale = (arclen/math.sqrt(0.5)) * 1.0875
         
-        hflip = -1
-        vflip = -1
-        scale = (bpath.length()/math.sqrt(0.5)) * 1.0875
-        print "scale:", scale
+        # calculate delta phi
+        phi = phase_delta_min(phi_p0,phi_p1)
+        delta_t = math.sqrt(((0 + phi) * 2)/cmath.pi)
 
-        rotation = -0.2
-        for i in range(0,10):
-            print i
-            cl = Clothoid(scale, rotation, (p0.x(),p0.y()), hflip, vflip)
-            t = cl.closest_t(p1)
-            ph1 = cmath.phase(p1 - p0)
-            ph2 = cmath.phase(cl.p(t) - p0)
-            print "p1:", p1
-            print "t, p(t):", t, cl.p(t)
-            print "ph1, ph2, delta, min_delta_degrees:", ph1, ph2, ph1 - ph2, phase_delta_min(ph1, ph2)
-            print "rotation", rotation, math.degrees(rotation)
-            self.outline_guesses.append(Point(cl.x(t),cl.y(t)))
+            for i in range(0,10):
+                cl = Clothoid(scale, rotation, (p0.x(),p0.y()), hflip, vflip)
+                t = cl.closest_t(p1)
+                ph1 = cmath.phase(p1 - p0)
+                ph2 = cmath.phase(cl.p(t) - p0)
+                #print "p1:", p1
+                #print "t, p(t):", t, cl.p(t)
+                #print "ph1, ph2, delta, min_delta_degrees:", ph1, ph2, ph1 - ph2, phase_delta_min(ph1, ph2)
+                #print "rotation", rotation, math.degrees(rotation)
+                self.outline_guesses.append(Point(cl.x(t),cl.y(t)))
+                self.outline_clothoids.append(cl)
+                rotation = rotation + (ph1 - ph2)
+
+            path_compare(self.outline_path, 0.0, self.outline_feature_45_upper_left.T, cl, 0.0, t, nodes=10)
+
             self.outline_clothoids.append(cl)
-            rotation = rotation + (ph1 - ph2)
-
-        path_compare(self.outline_path, 0.0, self.outline_feature_45_upper_left.T, cl, 0.0, t, nodes=10)
-
-        print "tangent", math.degrees(cmath.phase(cl.tangent(t)))
-        self.outline_clothoids.append(cl)
