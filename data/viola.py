@@ -27,32 +27,31 @@ from time import sleep
 
 
 class Clothoid(object):
-    def __init__(self, scale=1, rotation=0, origin=(0,0), hflip=1, vflip=1, T=2.1):
+    def __init__(self, scale=1, rotation=0, origin=(0,0), clockwise=True, T=2.1):
         self.T          = T
         self.scale      = scale
         self.rotation   = rotation
         self.origin     = origin
-        self.hflip      = hflip
-        self.vflip      = vflip
+        self.clockwise  = clockwise
 
     def __repr__(self):
-        fmt = '{}(scale={:.2f},rotation={:.2f},origin=({:.2f},{:.2f}),hflip={:1d},vflip={:1d})'
-        return fmt.format(self.__class__.__name__, self.scale, self.rotation, self.origin[0], self.origin[1], self.hflip, self.vflip)
+        fmt = '{}(scale={:.2f},rotation={:.2f},origin=({:.2f},{:.2f}),clockwise={:b})'
+        return fmt.format(self.__class__.__name__, self.scale, self.rotation, self.origin[0], self.origin[1], self.clockwise)
 
     def sinVec(self):
         t = np.linspace(0, self.T, 1000)
         ss, cc = fresnel(t)
-        return (self.hflip * \
-                ((self.scale * cc * math.cos(self.rotation)) - \
-                 (self.scale * ss * math.sin(self.rotation))) + \
+        twist = (1, -1)[bool(self.clockwise)]
+        return (((self.scale * cc * math.cos(twist * self.rotation)) - \
+                 (self.scale * ss * math.sin(twist * self.rotation))) + \
                 self.origin[0])
 
     def cosVec(self):
         t = np.linspace(0, self.T, 1000)
         ss, cc = fresnel(t)
-        return (self.vflip * \
-                ((self.scale * cc * math.sin(self.rotation)) + \
-                 (self.scale * ss * math.cos(self.rotation))) + \
+        twist = (1, -1)[bool(self.clockwise)]
+        return (twist * ((self.scale * cc * math.sin(twist * self.rotation)) + \
+                 (self.scale * ss * math.cos(twist * self.rotation))) + \
                 self.origin[1])
 
     def p(self, t=0):
@@ -60,27 +59,27 @@ class Clothoid(object):
 
     def x(self, t=0):
         ss, cc = fresnel(t)
-        return (self.hflip * \
-                ((self.scale * cc * math.cos(self.rotation)) - \
-                 (self.scale * ss * math.sin(self.rotation))) + \
+        twist = (1, -1)[bool(self.clockwise)]
+        return (((self.scale * cc * math.cos(twist * self.rotation)) - \
+                 (self.scale * ss * math.sin(twist * self.rotation))) + \
                 self.origin[0])
 
     def y(self, t=0):
         ss, cc = fresnel(t)
-        return (self.vflip * \
-                ((self.scale * cc * math.sin(self.rotation)) + \
-                 (self.scale * ss * math.cos(self.rotation))) + \
+        twist = (1, -1)[bool(self.clockwise)]
+        return (twist * ((self.scale * cc * math.sin(twist * self.rotation)) + \
+                 (self.scale * ss * math.cos(twist * self.rotation))) + \
                 self.origin[1])
     
     def tangent(self, t=0):
+        #XXX check that twist is implemented correctly
         cc = math.cos((cmath.pi/2)*t**2)
         ss = math.sin((cmath.pi/2)*t**2)
-        x = (self.hflip * \
-             ((cc * math.cos(self.rotation)) - \
-              (ss * math.sin(self.rotation))))
-        y = (self.vflip * \
-             ((cc * math.sin(self.rotation)) + \
-              (ss * math.cos(self.rotation))))
+        twist = (1, -1)[bool(self.clockwise)]
+        x = (((cc * math.cos(twist * self.rotation)) - \
+              (ss * math.sin(twist * self.rotation))))
+        y = twist * (((cc * math.sin(twist * self.rotation)) + \
+              (ss * math.cos(twist * self.rotation))))
         return complex(x,y)
 
     def closest_t(self, p, max_t=2.2):
@@ -125,7 +124,11 @@ class POI(object):
         return self.path.point(self.T).imag
     
     def tangent(self):
-        return self.path.unit_tangent(self.T)
+        try:
+            tangent = self.path.unit_tangent(self.T)
+        except AssertionError:
+            tangent = self.path.unit_tangent(self.T-.01)
+        return tangent
 
     def closest_t(self, p):
         """Set the POI to point on the path closest to p."""
@@ -183,7 +186,7 @@ class CL(object):
         self.top_right = top_right
 
     def __repr__(self):
-        return ('{}(bot={},top={})'.format(self.__class__.__name__, self.bot, self.top))
+        return ('{}(bot={},top_left={}, top_right{})'.format(self.__class__.__name__, self.bot, self.top_left, self.top_right))
 
     def plot(self, plot, color='r-'):
         plot.plot([self.bot.x(),self.top_left.x()],[self.bot.y(),self.top_left.y()],color)
@@ -273,10 +276,11 @@ class Viola(object):
 
         # normalize the path for (0,0) at the centerline of the bottom of the instrument
         # XXX A proper centerline would be to consider vertical extremi, or average(x) for all x,
-        # or svgpathtools.path.point(0.5).
+        # or svgpathtools.path.point(0.5). It also may be tilted, so a rotation is required.
 
         xmin, xmax, ymin, ymax = path.bbox()                    # use a bounding box to determine x,y extremi
-        xshift = ((xmax - xmin)/2.0) + xmin                     # calculate shift to center y axis on centerline
+        #XXX xshift = ((xmax - xmin)/2.0) + xmin                # calculate shift to center y axis on centerline
+        xshift = path.point(0.0).real                           # T=0 appears to find top most point
         scale = 1000.0 / 10.0**(ceil(np.log10(ymax - ymin)))    # calculate scaling factor for pixel == 0.1mm
         path = path.translated(complex(-xshift, -ymin))         # complex translation vector
         path = path.scaled(scale)                               # scale path to 10 pixels/mm (curves get detached)
@@ -284,9 +288,10 @@ class Viola(object):
             seg.end = path[ix+1].start                          # reattach curves so path.iscontinuous()
         path[-1].end = path[0].start
 
+
         self.outline_path = path
         self.outline_path_attributes = attributes
-        self.outline_pathsvg_attributes = svg_attributes               # XXX Seems not to like svg version of 1.0
+        self.outline_pathsvg_attributes = svg_attributes        # XXX Seems not to like svg version of 1.0
         self.outline_feature_bbox = path.bbox()
 
     def path_smooth(self, path=None):
@@ -386,15 +391,32 @@ class Viola(object):
         
     def outline_path_features(self, bout_tol=0.1, corner_curve_tol=1.0):
         """Use properties of a Viola to establish bout locations and widths, corner locations, etc."""
-        # first we establish the viol centerline
-        xmin, xmax, ymin, ymax = self.outline_feature_bbox
         path = self.outline_path
-        bot = POI(path, p=complex(0,0))
-        #top_left = POI(path, p=complex(0,ymax-ymin))
-        #top_right = POI(path, p=complex(0,ymax-ymin))
+
+        # flatten upper tangent
         top_left = POI(path, T=0.0)
         top_right = POI(path, T=1.0)
+        path[0].control1 = complex(path[0].control1.real,path[0].start.imag)
+        path[-1].control2 = complex(path[-1].control2.real,path[0].start.imag)
+
+        # flatten bottom tangent
+        bot = POI(path, p=complex(top_left.x(),0))
+        start,t0 = path.T2t(bot.T)
+        print start,t0
+        seg0 = bpoints2bezier(split_bezier(path[start].bpoints(),t0)[0])
+        seg1 = bpoints2bezier(split_bezier(path[start].bpoints(),t0)[1])
+        seg0.end = complex(seg0.end.real,0)
+        seg0.control2 = complex(seg0.control2.real,0)
+        seg1.control1 = complex(seg1.control1.real,0)
+        seg1.start = complex(seg1.start.real,0)
+        path.insert(start,seg0)
+        path[start+1] = seg1
+
+        # now we establish the viol centerline
+        bot = POI(path, p=complex(top_left.x(),0))
+
         self.outline_feature_centerline = CL(bot, top_left, top_right)
+        print math.degrees(cmath.phase(bot.tangent()))
 
         # we need a vectorized function to find the tangent of a curve
         vec_f_tan = np.vectorize(lambda t:seg.unit_tangent(t))
@@ -447,6 +469,14 @@ class Viola(object):
         start, end=self.extrema_in_range(corners,bot,top)
         self.outline_feature_corner_lower_left = POI(path,start)
         self.outline_feature_corner_lower_right = POI(path,end)
+        #self.outline_feature_corner_lower_left_tangent = Tangent(path,start+.003)
+        #self.outline_feature_corner_lower_left_tangent_poi = POI(path,start+.003)
+        #self.outline_feature_corner_lower_left_tangent2 = Tangent(path,start-.003)
+        #self.outline_feature_corner_lower_left_tangent2_poi = POI(path,start-.003)
+        #self.outline_feature_corner_lower_right_tangent = Tangent(path,end-.003)
+        #self.outline_feature_corner_lower_right_tangent_poi = POI(path,end-.003)
+        #self.outline_feature_corner_lower_right_tangent2 = Tangent(path,end+.003)
+        #self.outline_feature_corner_lower_right_tangent2_poi = POI(path,end+.003)
 
         # Find the upper corners
         #XXX There could be residual segments below upper bout that are left/right of corner!
@@ -455,6 +485,14 @@ class Viola(object):
         start, end=self.extrema_in_range(corners,bot,top)
         self.outline_feature_corner_upper_left = POI(path,start)
         self.outline_feature_corner_upper_right = POI(path,end)
+        #self.outline_feature_corner_upper_left_tangent = Tangent(path,start+.003)
+        #self.outline_feature_corner_upper_left_tangent_poi = POI(path,start+.003)
+        #self.outline_feature_corner_upper_left_tangent2 = Tangent(path,start-.003)
+        #self.outline_feature_corner_upper_left_tangent2_poi = POI(path,start-.003)
+        #self.outline_feature_corner_upper_right_tangent = Tangent(path,end-.003)
+        #self.outline_feature_corner_upper_right_tangent_poi = POI(path,end-.003)
+        #self.outline_feature_corner_upper_right_tangent2 = Tangent(path,end+.003)
+        #self.outline_feature_corner_upper_right_tangent2_poi = POI(path,end+.003)
 
         # Now we bracket our search based on bouts and corners to find the turns (change of direction)
 
@@ -512,33 +550,90 @@ class Viola(object):
 
     def outline_clothoids_find(self):
         """Define a set of clothoids based on path features."""
-        # calculate first clothoid from top center to 45 degrees
-        bpath = path_slice(self.outline_path, 0.0, self.outline_feature_45_upper_left.T)
-        
-        p_45 = self.outline_feature_45_upper_left.p()
-        p_cl = self.outline_feature_centerline.top_left.p()
-        
-        origin = (self.outline_feature_centerline.top_left.x(),self.outline_feature_centerline.top_left.y())
-        hflip = -1
-        vflip = -1
-        scale = (bpath.length()/math.sqrt(0.5)) * 1.0875
-        print "scale:", scale
+        #XXX I can't think of an obvious way to make this less ugly! A global dictionary?!
+        clist = [
+            [self.outline_feature_centerline.top_left, self.outline_feature_45_upper_left],
+            [self.outline_feature_turn_upper_left, self.outline_feature_45_upper_left],
+            [self.outline_feature_turn_upper_left, self.outline_feature_corner_upper_left],
+            [self.outline_feature_bout_middle.left, self.outline_feature_corner_upper_left],
+            [self.outline_feature_bout_middle.left, self.outline_feature_corner_lower_left],
+            [self.outline_feature_turn_lower_left, self.outline_feature_corner_lower_left],
+            [self.outline_feature_turn_lower_left, self.outline_feature_45_lower_left],
+            [self.outline_feature_centerline.bot, self.outline_feature_45_lower_left],
+            [self.outline_feature_centerline.bot, self.outline_feature_45_lower_right],
+            [self.outline_feature_turn_lower_right, self.outline_feature_45_lower_right],
+            [self.outline_feature_turn_lower_right, self.outline_feature_corner_lower_right],
+            [self.outline_feature_bout_middle.right, self.outline_feature_corner_lower_right],
+            [self.outline_feature_bout_middle.right, self.outline_feature_corner_upper_right],
+            [self.outline_feature_turn_upper_right, self.outline_feature_corner_upper_right],
+            [self.outline_feature_turn_upper_right, self.outline_feature_45_upper_right],
+            [self.outline_feature_centerline.top_right, self.outline_feature_45_upper_right]
+        ]
 
-        rotation = -0.2
-        for i in range(0,10):
-            cl = Clothoid(scale, rotation, origin, hflip, vflip)
-            t = cl.closest_t(p_45)
-            ph1 = cmath.phase(p_45 - p_cl)
-            ph2 = cmath.phase(cl.p(t) - p_cl)
-            print "i, ph1, ph2, delta, rotation", i, ph1, ph2, ph1 - ph2, math.degrees(rotation)
-            self.outline_guesses.append(Point(cl.x(t),cl.y(t)))
+        # iterate over every clothoid to construct
+        for ix,points in enumerate(clist):
+            p0,p1 = [points[0],points[1]] 
+
+            is_corner = p1 in [self.outline_feature_corner_upper_left, self.outline_feature_corner_upper_right,
+                               self.outline_feature_corner_lower_left, self.outline_feature_corner_lower_right]
+
+            # calculate transform based on entry angle and cw/ccw twist
+            rotation, clockwise  = twist_calc(p0,p1)
+            # estimate the scale based on arclength of bezier path
+            if p1.T > p0.T:
+                arclen = self.outline_path.length(p0.T, p1.T)
+                if is_corner:
+                    tan = (cmath.phase(p1.path.unit_tangent(p1.T - .003)) + (2 * cmath.pi)) % (2 * cmath.pi)
+                else:
+                    tan = (cmath.phase(p1.path.unit_tangent(p1.T)) + (2 * cmath.pi)) % (2 * cmath.pi)
+                tan2 = (tan + cmath.pi) % (2 * cmath.pi)
+            else:
+                arclen = self.outline_path.length(p1.T, p0.T)
+                if p0.T > .997:
+                    tan = (cmath.phase(-p1.path.unit_tangent(p1.T)) + (2 * cmath.pi)) % (2 * cmath.pi)
+                else:
+                    tan = (cmath.phase(-p1.path.unit_tangent(p1.T + .003)) + (2 * cmath.pi)) % (2 * cmath.pi)
+                tan2 = (tan + cmath.pi) % (2 * cmath.pi)
+
+            #phi = min(tan, tan2)
+            phi = abs(phase_delta_min(rotation, tan))
+            #print "Anus", math.degrees(tan), math.degrees(phi), math.degrees(phi1), math.degrees(phi2)
+
+            if phi < cmath.pi/8:
+                phi = max(tan, tan2)
+                print "Fuck", math.degrees(tan), math.degrees(tan2), math.degrees(phi)
+
+            t = math.sqrt((2 * phi)/cmath.pi)
+            scale = arclen/t
+
+            fmt = "Cl{:2d}: t0:{:.2f} t1:{:.2f} rot:{:6.2f} phi:{:6.2f} arc:{:6.2f} scale:{:5.2f} eul_t:{:.2f}"
+            print fmt.format(ix+1, p0.T, p1.T, math.degrees(rotation), math.degrees(phi), arclen, scale, t)
+
+            cl = Clothoid(scale, rotation, (p0.x(),p0.y()), clockwise)
             self.outline_clothoids.append(cl)
-            rotation = rotation + (ph1 - ph2)
 
-        path_compare(self.outline_path, 0.0, self.outline_feature_45_upper_left.T, cl, 0.0, t, nodes=10)
+            #XXX we want minimize error with a minimize search for scale
 
-        #print "tangent", math.degrees(cmath.phase(cl.tangent(t)))
-        self.outline_clothoids.append(cl)
+            #XXX convert the next block to brentq search for rotation_error == 0
+            #for i in range(0,10):
+                #cl = Clothoid(scale, rotation, (p0.x(),p0.y()), clockwise)
+                #t = cl.closest_t(p1)
+                #ph1 = cmath.phase(p1 - p0)
+                #ph2 = cmath.phase(cl.p(t) - p0)
+
+                #print "p1:", p1
+                #print "t, p(t):", t, cl.p(t)
+                #print "ph1, ph2, delta, min_delta_degrees:", ph1, ph2, ph1 - ph2, phase_delta_min(ph1, ph2)
+                #print "rotation", rotation, math.degrees(rotation)
+                #self.outline_guesses.append(Point(cl.x(t),cl.y(t)))
+                #self.outline_clothoids.append(cl)
+                #rotation = rotation + (ph1 - ph2)
+
+        #path_compare(self.outline_path, 0.0, self.outline_feature_45_upper_left.T, cl, 0.0, t, nodes=10)
+
+        #XXX Here is where we iterate on scale to find best scale
+
+        #self.outline_clothoids.append(cl)
         
 
     def plot (self, plot=None):
@@ -643,15 +738,21 @@ def path_find_slope(path, T0=0.0, T1=1.0, phi=None):
     return brentq(f, T0, T1, args=(phi))
 
 def phase_delta_min(p1, p2):
-    """Find the minimum angular distance between two angles."""
-    n1 = (p1+cmath.pi*2)%(cmath.pi*2.0)
-    n2 = (p2+cmath.pi*2)%(cmath.pi*2.0)
-    return min(abs(n1-n2),abs(n2-n1))
+    """Find the minimum angular distance between two angles. Result is [-pi,pi]."""
+    return math.atan2(math.sin(p1-p2), math.cos(p1-p2))
 
-def twist_calc(p0,p1):
-    return
-    #print p0,p1
-    #print p1 - p0, (math.degrees((cmath.phase(p1 - p0)+(cmath.pi))) + 180)%360
+def twist_calc(p0, p1):
+    phi = (cmath.phase(p0.tangent()) + 2 * cmath.pi) % (2 * cmath.pi)
+    phi2 = (phi + cmath.pi) % (2 * cmath.pi)
+    tan = (cmath.phase(p1.p() - p0.p()) + 2 * cmath.pi) % (2 * cmath.pi)
+
+    if abs(phase_delta_min(phi2, tan)) < abs(phase_delta_min(phi, tan)):
+        phi = phi2
+
+    # determine if the clothoid should be clockwise or counterclockwise
+    clockwise = (phase_delta_min(phi, tan) > 0)
+
+    return phi, clockwise
 
 def bez_extrema_t(b):
     """Returns the minimum and maximum t values for the real axis (x) of a cubic bezier."""
@@ -710,9 +811,9 @@ def path_compare(path, path_t0, path_t1, clothoid, clothoid_t0, clothoid_t1, nod
     tvec_clothoid = np.linspace(clothoid_t0,clothoid_t1,nodes)
     bez = np.array([path.point(t) for t in tvec_path])
     clo = np.array([clothoid.p(t) for t in tvec_clothoid])
-    #print bez
-    #print clo
-    #print bez - clo
+    print bez
+    print clo
+    print bez - clo
 
 # Main entry point
 #
