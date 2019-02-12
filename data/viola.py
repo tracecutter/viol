@@ -12,6 +12,7 @@ from scipy.special import fresnel
 from scipy.spatial import distance
 from scipy.optimize import minimize_scalar, brentq
 import matplotlib.pyplot as plt
+from matplotlib.figure import SubplotParams
 import math
 from math import ceil, log, sqrt
 
@@ -104,8 +105,9 @@ class Point(object):
 
 class POI(object):
     """A point of interest."""
-    def __init__(self, path, T=0, p=None):
+    def __init__(self, path, T=0, p=None, label=None):
         self.path = path
+        self.label = label
         if p is not None:
             self.closest_t(p)
         else:
@@ -139,6 +141,12 @@ class POI(object):
     def plot(self, plot, color='b^'):
         plot.plot([self.x()],[self.y()],color)
 
+    def plot_t(self, plot, color='b--'):
+        plot.plot([self.T,self.T],[0,1],color)
+        if self.label is not None:
+            plot.annotate(self.label, xy=(self.T,0), xytext=(self.T,0), rotation=90,
+                          verticalalignment='bottom',horizontalalignment='center')
+
 class Tangent(object):
     """A unit tangent on a path at T"""
     def __init__(self, path, T=0, mag=50):
@@ -157,15 +165,25 @@ class Tangent(object):
 
 class Bout(object):
     """A bout from the POI left to the POI right"""
-    def __init__(self, left, right):
+    def __init__(self, left, right, label=None):
         self.left = left
         self.right = right
+        self.label = label
 
     def __repr__(self):
         return ('{}(left={},right={})'.format(self.__class__.__name__, self.left, self.right))
 
     def plot(self, plot, color='r-'):
         plot.plot([self.left.x(),self.right.x()],[self.left.y(),self.left.y()],color)
+
+    def plot_t(self, plot, color='b--'):
+        plot.plot([self.left.T,self.left.T],[0,1],color)
+        plot.plot([self.right.T,self.right.T],[0,1],color)
+        if self.label is not None:
+            plot.annotate(self.label+"L", xy=(self.left.T,0), xytext=(self.left.T,0), rotation=90,
+                          verticalalignment='bottom',horizontalalignment='center')
+            plot.annotate(self.label+"R", xy=(self.right.T,0), xytext=(self.right.T,0), rotation=90,
+                          verticalalignment='bottom',horizontalalignment='center')
 
 class Corner(object):
     """A corner POI."""
@@ -180,10 +198,11 @@ class Corner(object):
 
 class CL(object):
     """A centerline from the POI b(ottom) to the POI t(op)"""
-    def __init__(self, bot, top_left, top_right):
+    def __init__(self, bot, top_left, top_right, label=None):
         self.bot = bot
         self.top_left = top_left
         self.top_right = top_right
+        self.label = label
 
     def __repr__(self):
         return ('{}(bot={},top_left={}, top_right{})'.format(self.__class__.__name__, self.bot, self.top_left, self.top_right))
@@ -191,6 +210,17 @@ class CL(object):
     def plot(self, plot, color='r-'):
         plot.plot([self.bot.x(),self.top_left.x()],[self.bot.y(),self.top_left.y()],color)
 
+    def plot_t(self, plot, color='b--'):
+        plot.plot([self.top_left.T,self.top_left.T],[0,1],color)
+        plot.plot([self.top_right.T,self.top_right.T],[0,1],color)
+        plot.plot([self.bot.T,self.bot.T],[0,1],color)
+        if self.label is not None:
+            plot.annotate(self.label+"TL", xy=(self.top_left.T,0), xytext=(self.top_left.T,0), rotation=90,
+                          verticalalignment='bottom',horizontalalignment='center')
+            plot.annotate(self.label+"TR", xy=(self.top_right.T,0), xytext=(self.top_right.T,0), rotation=90,
+                          verticalalignment='bottom',horizontalalignment='center')
+            plot.annotate(self.label+"B", xy=(self.bot.T,0), xytext=(self.bot.T,0), rotation=90,
+                          verticalalignment='bottom',horizontalalignment='center')
 
 class Viola(object):
     """A generalized class of the geometry, features, and attributes of an instrument in the viol family."""
@@ -402,7 +432,6 @@ class Viola(object):
         # flatten bottom tangent
         bot = POI(path, p=complex(top_left.x(),0))
         start,t0 = path.T2t(bot.T)
-        print start,t0
         seg0 = bpoints2bezier(split_bezier(path[start].bpoints(),t0)[0])
         seg1 = bpoints2bezier(split_bezier(path[start].bpoints(),t0)[1])
         seg0.end = complex(seg0.end.real,0)
@@ -415,7 +444,7 @@ class Viola(object):
         # now we establish the viol centerline
         bot = POI(path, p=complex(top_left.x(),0))
 
-        self.outline_feature_centerline = CL(bot, top_left, top_right)
+        self.outline_feature_centerline = CL(bot, top_left, top_right, label="CL_")
         print math.degrees(cmath.phase(bot.tangent()))
 
         # we need a vectorized function to find the tangent of a curve
@@ -450,15 +479,15 @@ class Viola(object):
         top = self.outline_feature_centerline.top_left.y()
         # Find the upper left and right bout points in upper third of scan
         start, end=self.extrema_in_range(bouts,top*2.0/3.0,top)
-        self.outline_feature_bout_upper = Bout(POI(path,start),POI(path,end))
+        self.outline_feature_bout_upper = Bout(POI(path,start),POI(path,end),label="Bout_U")
 
         # Find the lower left and right bout points
         start, end=self.extrema_in_range(bouts,0.0,top*1.0/3.0)
-        self.outline_feature_bout_lower = Bout(POI(path,start),POI(path,end))
+        self.outline_feature_bout_lower = Bout(POI(path,start),POI(path,end),label="Bout_L")
 
         # Find the middle left and right bout points
         start, end=self.extrema_in_range(bouts,top*1.0/3.0,top*2.0/3.0, reverse=True)
-        self.outline_feature_bout_middle = Bout(POI(path,start),POI(path,end))
+        self.outline_feature_bout_middle = Bout(POI(path,start),POI(path,end),label="Bout_M")
 
         # Now we bracket our search based on bout locales to determine the real corners
 
@@ -467,8 +496,8 @@ class Viola(object):
         bot = self.outline_feature_bout_lower.left.y()
         top = self.outline_feature_bout_middle.left.y()
         start, end=self.extrema_in_range(corners,bot,top)
-        self.outline_feature_corner_lower_left = POI(path,start)
-        self.outline_feature_corner_lower_right = POI(path,end)
+        self.outline_feature_corner_lower_left = POI(path,start,label="Corner_LL")
+        self.outline_feature_corner_lower_right = POI(path,end,label="Corner_LR")
         #self.outline_feature_corner_lower_left_tangent = Tangent(path,start+.003)
         #self.outline_feature_corner_lower_left_tangent_poi = POI(path,start+.003)
         #self.outline_feature_corner_lower_left_tangent2 = Tangent(path,start-.003)
@@ -483,8 +512,8 @@ class Viola(object):
         bot = self.outline_feature_bout_middle.left.y()
         top = self.outline_feature_bout_upper.left.y()
         start, end=self.extrema_in_range(corners,bot,top)
-        self.outline_feature_corner_upper_left = POI(path,start)
-        self.outline_feature_corner_upper_right = POI(path,end)
+        self.outline_feature_corner_upper_left = POI(path,start,label="Corner_UL")
+        self.outline_feature_corner_upper_right = POI(path,end,label="Corner_UR")
         #self.outline_feature_corner_upper_left_tangent = Tangent(path,start+.003)
         #self.outline_feature_corner_upper_left_tangent_poi = POI(path,start+.003)
         #self.outline_feature_corner_upper_left_tangent2 = Tangent(path,start-.003)
@@ -501,52 +530,52 @@ class Viola(object):
         T0 = self.outline_feature_bout_upper.left.T
         T1 = self.outline_feature_corner_upper_left.T
         T = minimize_scalar(f, bounds=(T0, T1), method='bounded', options={'xatol': 1e-5,'disp':0}).x
-        self.outline_feature_turn_upper_left = POI(path,T)
-        self.outline_feature_turn_ul_tangent = Tangent(path,T)
+        self.outline_feature_turn_upper_left = POI(path,T,label="Turn_UL")
+        #self.outline_feature_turn_ul_tangent = Tangent(path,T)
 
         T0 = self.outline_feature_corner_lower_left.T
         T1 = self.outline_feature_bout_lower.left.T
         T = minimize_scalar(f, bounds=(T0, T1), method='bounded', options={'xatol': 1e-5,'disp':0}).x
-        self.outline_feature_turn_lower_left = POI(path,T)
-        self.outline_feature_turn_ll_tangent = Tangent(path,T)
+        self.outline_feature_turn_lower_left = POI(path,T,label="Turn_LL")
+        #self.outline_feature_turn_ll_tangent = Tangent(path,T)
 
         T0 = self.outline_feature_bout_lower.right.T
         T1 = self.outline_feature_corner_lower_right.T
         T = minimize_scalar(f, bounds=(T0, T1), method='bounded', options={'xatol': 1e-5,'disp':0}).x
-        self.outline_feature_turn_lower_right = POI(path,T)
-        self.outline_feature_turn_lr_tangent = Tangent(path,T)
+        self.outline_feature_turn_lower_right = POI(path,T,label="Turn_LR")
+        #self.outline_feature_turn_lr_tangent = Tangent(path,T)
 
         T0 = self.outline_feature_corner_upper_right.T
         T1 = self.outline_feature_bout_upper.right.T
         T = minimize_scalar(f, bounds=(T0, T1), method='bounded', options={'xatol': 1e-5,'disp':0}).x
-        self.outline_feature_turn_upper_right = POI(path,T)
-        self.outline_feature_turn_ur_tangent = Tangent(path,T)
+        self.outline_feature_turn_upper_right = POI(path,T,label="Turn_UR")
+        #self.outline_feature_turn_ur_tangent = Tangent(path,T)
 
         # Now we search for the 45 degree slopes on upper and lower corners (where the clothoids join)
 
         T0=0.015
         T1=self.outline_feature_bout_upper.left.T - 0.015
         T = path_find_slope(path, T0, T1, phi=-3.0*cmath.pi/4.0)
-        self.outline_feature_45_upper_left = POI(path,T)
-        self.outline_feature_45_upper_left_tangent = Tangent(path,T)
+        self.outline_feature_45_upper_left = POI(path,T,label="45_UL")
+        #self.outline_feature_45_upper_left_tangent = Tangent(path,T)
 
         T0 = self.outline_feature_bout_lower.left.T + 0.015
         T1 = self.outline_feature_centerline.bot.T - 0.015
         T = path_find_slope(path, T0, T1, phi=-cmath.pi/4.0)
-        self.outline_feature_45_lower_left = POI(path,T)
-        self.outline_feature_45_lower_left_tangent = Tangent(path,T)
+        self.outline_feature_45_lower_left = POI(path,T,label="45_LL")
+        #self.outline_feature_45_lower_left_tangent = Tangent(path,T)
 
         T0 = self.outline_feature_centerline.bot.T + 0.015
         T1 = self.outline_feature_bout_lower.right.T -0.015
         T = path_find_slope(path, T0, T1, phi=cmath.pi/4.0)
-        self.outline_feature_45_lower_right = POI(path,T)
-        self.outline_feature_45_lower_right_tangent = Tangent(path,T)
+        self.outline_feature_45_lower_right = POI(path,T,label="45_LR")
+        #self.outline_feature_45_lower_right_tangent = Tangent(path,T)
 
         T0 = self.outline_feature_bout_upper.right.T + 0.015
         T1 = self.outline_feature_centerline.top_right.T - 0.015
         T = path_find_slope(path, T0, T1, phi=3*cmath.pi/4.0)
-        self.outline_feature_45_upper_right = POI(path,T)
-        self.outline_feature_45_upper_right_tangent = Tangent(path,T)
+        self.outline_feature_45_upper_right = POI(path,T,label="45_UR")
+        #self.outline_feature_45_upper_right_tangent = Tangent(path,T)
 
     def outline_clothoids_find(self):
         """Define a set of clothoids based on path features."""
@@ -574,67 +603,56 @@ class Viola(object):
         for ix,points in enumerate(clist):
             p0,p1 = [points[0],points[1]] 
 
-            is_corner = p1 in [self.outline_feature_corner_upper_left, self.outline_feature_corner_upper_right,
-                               self.outline_feature_corner_lower_left, self.outline_feature_corner_lower_right]
+            # the unit_tangent at the corners is wonky, so we trim back the curve to just short of corner
+            if p1 in [self.outline_feature_corner_upper_left, self.outline_feature_corner_upper_right,
+                    self.outline_feature_corner_lower_left, self.outline_feature_corner_lower_right]:
+                adj = .003
+            else:
+                adj = 0
 
-            # calculate transform based on entry angle and cw/ccw twist
+            # calculate clothoid twist entry angle and determine if clockwise or anticlockwise twist
             rotation, clockwise  = twist_calc(p0,p1)
             # estimate the scale based on arclength of bezier path
             if p1.T > p0.T:
                 arclen = self.outline_path.length(p0.T, p1.T)
-                if is_corner:
-                    tan = (cmath.phase(p1.path.unit_tangent(p1.T - .003)) + (2 * cmath.pi)) % (2 * cmath.pi)
-                else:
-                    tan = (cmath.phase(p1.path.unit_tangent(p1.T)) + (2 * cmath.pi)) % (2 * cmath.pi)
-                tan2 = (tan + cmath.pi) % (2 * cmath.pi)
+                tan = (cmath.phase(p1.path.unit_tangent(p1.T - adj)) + (2 * cmath.pi)) % (2 * cmath.pi)
             else:
                 arclen = self.outline_path.length(p1.T, p0.T)
-                if p0.T > .997:
-                    tan = (cmath.phase(-p1.path.unit_tangent(p1.T)) + (2 * cmath.pi)) % (2 * cmath.pi)
-                else:
-                    tan = (cmath.phase(-p1.path.unit_tangent(p1.T + .003)) + (2 * cmath.pi)) % (2 * cmath.pi)
-                tan2 = (tan + cmath.pi) % (2 * cmath.pi)
+                tan = (cmath.phase(-p1.path.unit_tangent(p1.T + adj)) + (2 * cmath.pi)) % (2 * cmath.pi)
 
-            #phi = min(tan, tan2)
+            # how much additional twist after initial rotation required?
             phi = abs(phase_delta_min(rotation, tan))
-            #print "Anus", math.degrees(tan), math.degrees(phi), math.degrees(phi1), math.degrees(phi2)
 
-            if phi < cmath.pi/8:
-                phi = max(tan, tan2)
-                print "Fuck", math.degrees(tan), math.degrees(tan2), math.degrees(phi)
-
+            # solve for the t on a clothoid that twists phi degrees and scale up to match bezier arclen
             t = math.sqrt((2 * phi)/cmath.pi)
             scale = arclen/t
 
-            fmt = "Cl{:2d}: t0:{:.2f} t1:{:.2f} rot:{:6.2f} phi:{:6.2f} arc:{:6.2f} scale:{:5.2f} eul_t:{:.2f}"
+            fmt = "Cl{:2d}: t0:{:.2f} t1:{:.2f} rot:{:6.2f} phi:{:6.2f} arc:{:6.2f} scale:{:6.2f} eul_t:{:.2f}"
             print fmt.format(ix+1, p0.T, p1.T, math.degrees(rotation), math.degrees(phi), arclen, scale, t)
 
-            cl = Clothoid(scale, rotation, (p0.x(),p0.y()), clockwise)
-            self.outline_clothoids.append(cl)
+            #cl = Clothoid(scale, rotation, (p0.x(),p0.y()), clockwise)
+            #self.outline_clothoids.append(cl)
 
-            #XXX we want minimize error with a minimize search for scale
+            tn = t
 
-            #XXX convert the next block to brentq search for rotation_error == 0
-            #for i in range(0,10):
-                #cl = Clothoid(scale, rotation, (p0.x(),p0.y()), clockwise)
-                #t = cl.closest_t(p1)
-                #ph1 = cmath.phase(p1 - p0)
-                #ph2 = cmath.phase(cl.p(t) - p0)
+            for i in range(0,10):
+                cl = Clothoid(scale, rotation, (p0.x(),p0.y()), clockwise, T=tn)
+                #XXX this should respect is)corner  from above!
+                tn = cl.closest_t(p1.p(), max_t=tn)
+                ph1 = cmath.phase(p1.p() - p0.p())
+                ph2 = cmath.phase(cl.p(t) - p0.p())
 
                 #print "p1:", p1
                 #print "t, p(t):", t, cl.p(t)
                 #print "ph1, ph2, delta, min_delta_degrees:", ph1, ph2, ph1 - ph2, phase_delta_min(ph1, ph2)
                 #print "rotation", rotation, math.degrees(rotation)
-                #self.outline_guesses.append(Point(cl.x(t),cl.y(t)))
+                #self.outline_guesses.append(Point(cl.x(tn),cl.y(tn)))
                 #self.outline_clothoids.append(cl)
-                #rotation = rotation + (ph1 - ph2)
+                rotation = rotation + (ph1 - ph2)
+
+            self.outline_clothoids.append(cl)
 
         #path_compare(self.outline_path, 0.0, self.outline_feature_45_upper_left.T, cl, 0.0, t, nodes=10)
-
-        #XXX Here is where we iterate on scale to find best scale
-
-        #self.outline_clothoids.append(cl)
-        
 
     def plot (self, plot=None):
         """Plot a viola using matplotlib.  Note this does not display the plot."""
@@ -666,6 +684,51 @@ class Viola(object):
         # Plot outline path by digitizing the bezier curve(s) with 5000 points
         x,y = zip(*[(self.outline_path.point(T).real,self.outline_path.point(T).imag) for T in np.linspace(0.0,1.0,5000)])
         plot.plot(x,y,'b-')
+        return plot
+
+    def plot_curvature (self, plot=None):
+        if plot is None:
+            fig, plot = plt.subplots(figsize=(12,6),subplotpars=SubplotParams(bottom=.2))
+            plot.axis([0,1,0.03,0])
+            plot.tick_params(axis='x', which='both', bottom=False, top=False, labelbottom=False)
+            plot2 = plot.twinx()
+            plot2.axis([0,1,0,250])
+            plot2.tick_params(axis='x', which='both', bottom=False, top=False, labelbottom=False)
+
+        x = []
+        y = []
+        #sweep T in [T-.01, T, T+.01]
+        for t0 in np.linspace(0.0,0.9,500):
+            t1 = t0 + .05
+            t2 = t1 + .05
+            p0 = self.outline_path.point(t0)
+            p1 = self.outline_path.point(t1)
+            p2 = self.outline_path.point(t2)
+            pm = p0 + ((p2 - p0) / 2)
+            w = np.linalg.norm(p2-p0)
+            h = np.linalg.norm(p1-pm)
+            r = (h/2) + (w**2/(8*h))
+            k =  1/r
+            x.append(t1)
+            y.append(k)
+        plot.plot(x,y,'r-')
+
+        x = []
+        y = []
+        #sweep T in [0,1]
+        for t in np.linspace(0.0,1,500):
+            x.append(t)
+            y.append(abs(self.outline_path.point(t).real))
+        plot2.plot(x,y,'b-')
+
+        # Use a self referential string search to establish plottable features.
+        features = [(key) for key, value in self.__dict__.iteritems() if key.startswith("outline_feature")]
+        for feature in features:
+            try:
+                getattr(self, feature).plot_t(plot)
+            except AttributeError:
+                pass
+
         return plot
 
     def extrema_in_range(self,seg_list,ymin,ymax,reverse=False):
@@ -824,6 +887,7 @@ viola.outline_path = viola.path_smooth()
 viola.outline_path = viola.outline_path_compress()
 viola.outline_path_features()
 viola.outline_clothoids_find()
+viola.plot_curvature()
 
 plt = viola.plot()
 plt.show(block=False)
