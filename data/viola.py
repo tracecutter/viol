@@ -28,51 +28,62 @@ from time import sleep
 
 
 class Clothoid(object):
-    def __init__(self, scale=1, rotation=0, origin=(0,0), clockwise=True, T=2.1):
+    """ A clothoid (Euler's Sprial, Cornu Spiral, Fresnel Integral) class.  The clothoid can be
+    scaled, rotated, and shifted to a new origin.  The clothoid can be flipped to turn clockwise or
+    counterclockwise.  The clothoid can begin at T0 (other than 0.0) to start with a curvature greater
+    than 0.  If this is the case, the rotation is increased so the clothoid points the same direction as
+    if T0 was 0 (in the direction of the parameter rotation)."""
+    def __init__(self, scale=1, rotation=0, origin=(0,0), clockwise=True, T0=0.0, T=2.1):
+        self.T0         = T0
         self.T          = T
         self.scale      = scale
-        self.rotation   = rotation
         self.origin     = origin
         self.clockwise  = clockwise
+        twist = (1, -1)[bool(self.clockwise)]
+        # adjust rotation based upon tangent at fresnel(T0)
+        self.rotation   = rotation - twist * math.atan2(math.sin((cmath.pi * T0**2)/2),math.cos((cmath.pi * T0**2)/2))
 
     def __repr__(self):
         fmt = '{}(scale={:.2f},rotation={:.2f},origin=({:.2f},{:.2f}),clockwise={:b})'
         return fmt.format(self.__class__.__name__, self.scale, self.rotation, self.origin[0], self.origin[1], self.clockwise)
 
-    def sinVec(self):
-        t = np.linspace(0, self.T, 1000)
-        ss, cc = fresnel(t)
+    def vectors(self):
+        t = np.linspace(self.T0, self.T, 1000)
+        ss, cc = fresnel(t)                 # crank out the sin and cos vectors of the unit euler curver (fresnel integral)
+        ss = ss - fresnel(self.T0)[0]       # shift the curve origin to T0
+        cc = cc - fresnel(self.T0)[1]       # shift the curve origin to T0
         twist = (1, -1)[bool(self.clockwise)]
-        return (((self.scale * cc * math.cos(twist * self.rotation)) - \
-                 (self.scale * ss * math.sin(twist * self.rotation))) + \
+        svec = (((self.scale * cc * math.cos(twist * self.rotation)) - \
+                (self.scale * ss * math.sin(twist * self.rotation))) + \
                 self.origin[0])
-
-    def cosVec(self):
-        t = np.linspace(0, self.T, 1000)
-        ss, cc = fresnel(t)
-        twist = (1, -1)[bool(self.clockwise)]
-        return (twist * ((self.scale * cc * math.sin(twist * self.rotation)) + \
+        cvec = (twist * ((self.scale * cc * math.sin(twist * self.rotation)) + \
                  (self.scale * ss * math.cos(twist * self.rotation))) + \
                 self.origin[1])
+        return svec, cvec
 
     def p(self, t=0):
         return (complex(self.x(t), self.y(t)))
 
     def x(self, t=0):
-        ss, cc = fresnel(t)
+        ss, cc = fresnel(t)                 # crank out the sin and cos vectors of the unit euler curver (fresnel integral)
+        ss = ss - fresnel(self.T0)[0]       # shift the curve origin to T0
+        cc = cc - fresnel(self.T0)[1]       # shift the curve origin to T0
         twist = (1, -1)[bool(self.clockwise)]
         return (((self.scale * cc * math.cos(twist * self.rotation)) - \
                  (self.scale * ss * math.sin(twist * self.rotation))) + \
                 self.origin[0])
 
     def y(self, t=0):
-        ss, cc = fresnel(t)
+        ss, cc = fresnel(t)                 # crank out the sin and cos vectors of the unit euler curver (fresnel integral)
+        ss = ss - fresnel(self.T0)[0]       # shift the curve origin to T0
+        cc = cc - fresnel(self.T0)[1]       # shift the curve origin to T0
         twist = (1, -1)[bool(self.clockwise)]
         return (twist * ((self.scale * cc * math.sin(twist * self.rotation)) + \
                  (self.scale * ss * math.cos(twist * self.rotation))) + \
                 self.origin[1])
     
     def tangent(self, t=0):
+        #XXX is t relative to self.T0
         #XXX check that twist is implemented correctly
         cc = math.cos((cmath.pi/2)*t**2)
         ss = math.sin((cmath.pi/2)*t**2)
@@ -81,6 +92,7 @@ class Clothoid(object):
               (ss * math.sin(twist * self.rotation))))
         y = twist * (((cc * math.sin(twist * self.rotation)) + \
               (ss * math.cos(twist * self.rotation))))
+        #XXX shoud tangent be shifted to origin(self.T0)?
         return complex(x,y)
 
     def closest_t(self, p, max_t=2.2):
@@ -89,7 +101,8 @@ class Clothoid(object):
         return minimize_scalar(f, bounds=(0, max_t), method='bounded', options={'xatol': 1e-5,'disp':0}).x
 
     def plot(self, plot, color='r-'):
-        plot.plot(self.sinVec(), self.cosVec(), color, linewidth=1)
+        ss, cc = self.vectors()
+        plot.plot(ss, cc, color, linewidth=1)
 
 class Point(object):
     """A basic point."""
@@ -227,6 +240,7 @@ class Viola(object):
     def __init__(self):
         self.outline_clothoids = []
         self.outline_guesses = []
+        self.outline_inspects = []
         self.outline_path = None
         self.outline_path_attributes = None
         self.outline_pathsvg_attributes = None
@@ -602,6 +616,7 @@ class Viola(object):
         # iterate over every clothoid to construct
         for ix,points in enumerate(clist):
             p0,p1 = [points[0],points[1]] 
+            t0 = 0.0
 
             # the unit_tangent at the corners is wonky, so we trim back the curve to just short of corner
             if p1 in [self.outline_feature_corner_upper_left, self.outline_feature_corner_upper_right,
@@ -609,6 +624,11 @@ class Viola(object):
                 adj = .003
             else:
                 adj = 0
+
+            if p0 is self.outline_feature_bout_middle.left:
+                p0 = POI(self.outline_path, T=0.225)
+            #    t0 = (curvature == .012)
+            #    XXX but curvature depends on scale!
 
             # calculate clothoid twist entry angle and determine if clockwise or anticlockwise twist
             rotation, clockwise  = twist_calc(p0,p1)
@@ -636,7 +656,7 @@ class Viola(object):
             tn = t
 
             for i in range(0,10):
-                cl = Clothoid(scale, rotation, (p0.x(),p0.y()), clockwise, T=tn)
+                cl = Clothoid(scale, rotation, (p0.x(),p0.y()), clockwise, T0=t0, T=tn)
                 #XXX this should respect is)corner  from above!
                 tn = cl.closest_t(p1.p(), max_t=tn)
                 ph1 = cmath.phase(p1.p() - p0.p())
@@ -653,6 +673,9 @@ class Viola(object):
             self.outline_clothoids.append(cl)
 
         #path_compare(self.outline_path, 0.0, self.outline_feature_45_upper_left.T, cl, 0.0, t, nodes=10)
+
+    def inspect (self, T=0):
+        self.outline_inspects.append(POI(self.outline_path, T))
 
     def plot (self, plot=None):
         """Plot a viola using matplotlib.  Note this does not display the plot."""
@@ -681,6 +704,11 @@ class Viola(object):
         for guess in self.outline_guesses:
             guess.plot(plot)
 
+        # Plot inspection points
+
+        for inspect in self.outline_inspects:
+            inspect.plot(plot)
+
         # Plot outline path by digitizing the bezier curve(s) with 5000 points
         x,y = zip(*[(self.outline_path.point(T).real,self.outline_path.point(T).imag) for T in np.linspace(0.0,1.0,5000)])
         plot.plot(x,y,'b-')
@@ -689,8 +717,8 @@ class Viola(object):
     def plot_curvature (self, plot=None):
         if plot is None:
             fig, plot = plt.subplots(figsize=(12,6),subplotpars=SubplotParams(bottom=.2))
-            plot.axis([0,1,0.03,0])
-            plot.tick_params(axis='x', which='both', bottom=False, top=False, labelbottom=False)
+            plot.axis([0,1,0.05,0])
+            plot.tick_params(axis='x', which='both', bottom=True, top=False, labelbottom=True)
             plot2 = plot.twinx()
             plot2.axis([0,1,0,250])
             plot2.tick_params(axis='x', which='both', bottom=False, top=False, labelbottom=False)
@@ -698,9 +726,10 @@ class Viola(object):
         x = []
         y = []
         #sweep T in [T-.01, T, T+.01]
-        for t0 in np.linspace(0.0,0.9,500):
-            t1 = t0 + .05
-            t2 = t1 + .05
+        delta = 0.02
+        for t0 in np.linspace(0.0,1.0 - (2 * delta),500):
+            t1 = t0 + delta
+            t2 = t1 + delta
             p0 = self.outline_path.point(t0)
             p1 = self.outline_path.point(t1)
             p2 = self.outline_path.point(t2)
