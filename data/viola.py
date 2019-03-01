@@ -28,7 +28,7 @@ from time import sleep
 
 
 class Clothoid(object):
-    """ A clothoid (Euler's Sprial, Cornu Spiral, Fresnel Integral) class.  The clothoid can be
+    """A clothoid (Euler's Sprial, Cornu Spiral, Fresnel Integral) class.  The clothoid can be
     scaled, rotated, and shifted to a new origin.  The clothoid can be flipped to turn clockwise or
     counterclockwise.  The clothoid can begin at T0 (other than 0.0) to start with a curvature greater
     than 0.  If this is the case, the rotation is increased so the clothoid points the same direction as
@@ -270,7 +270,7 @@ class Viola(object):
         self.outline_feature_45_lower_right_tangent = None
         self.outline_feature_45_upper_right_tangent = None
 
-    def scan(self, imageFile, dpi=300, threshold=205, despeckle=10):
+    def body_scan(self, imageFile, dpi=300, threshold=205, despeckle=10):
         img = Image.open(imageFile)
         img = img.convert(mode="L")
 
@@ -332,107 +332,16 @@ class Viola(object):
             seg.end = path[ix+1].start                          # reattach curves so path.iscontinuous()
         path[-1].end = path[0].start
 
-
         self.outline_path = path
         self.outline_path_attributes = attributes
         self.outline_pathsvg_attributes = svg_attributes        # XXX Seems not to like svg version of 1.0
         self.outline_feature_bbox = path.bbox()
 
-    def path_smooth(self, path=None):
-        """Every adjoining segment starting handle and the previous segment ending handle is set to
-        the average of the two handles."""
-        if path is None:
-            path = self.outline_path
+        self.outline_path = path_smooth(self.outline_path)      # smooth the path
+        self.outline_path = path_compress(self.outline_path)    # compress the path
+        self.outline_path_features()                            # extract the path features
+        self.outline_clothoids_find()                           # build a clothoid model of the body
 
-        for ix,seg in enumerate(path):
-            if not isinstance(seg, CubicBezier):
-                p0 = complex(seg.start)
-                p1 = complex(seg.end)
-                c1 = p0 + .30 * (p1 - p0)/seg.length()      # put control1 handle 30% of the way to end point
-                c2 = p0 + .70 * (p1 - p0)/seg.length()      # put control2 handle 70% of the way to end point
-                path[ix] = CubicBezier(p0, c1, c2, p1)      # simply a straight line with control points in line
-                seg = path[ix]
-                
-            vec1 = path[ix-1].end - path[ix-1].control2
-            vec2 = seg.control1 - seg.start
-            new = vec1+vec2/2.0
-            path[ix].control1 = seg.start + new
-            path[ix-1].control2 = path[ix-1].end - new
-        return path
-
-    def outline_path_compress(self, path=None, arc_thresh=5.0, turn_thresh=30):
-        """Combine adjacent bezier curves if the curvature is low.  Don't combine more than arc_thresh arc length."""
-        if path is None:
-            path = self.outline_path
-
-        cpath = Path()
-        ix = 0
-        p0 = c1 = c2 = p1 = None
-        arclen = 0.0
-        while ix < len(path):
-            # add a segment to combine
-            if isinstance(path[ix], CubicBezier):
-                if p0 is None:
-                    ix0 = ix
-                    p0 = complex(path[ix].start)
-                    c1 = complex(path[ix].control1)
-
-                # XXX Should we increase magnitude of p0->c1? for each additional segment?
-
-                # add on the segments arc length
-                arclen += path[ix].length()
-
-                # XXX Check here if the next segment is big turn, in which case terminate
-                # calculate curvature relative to previous segment based on endpoint
-                opp = path[ix-1].end.real - path[ix-1].start.real
-                adj = path[ix-1].end.imag - path[ix-1].start.imag
-                hyp = (opp**2 + adj**2)**0.5
-                ang0 = np.rad2deg(np.arcsin(opp/hyp))
-                opp = path[ix].end.real - path[ix].start.real
-                adj = path[ix].end.imag - path[ix].start.imag
-                hyp = (opp**2 + adj**2)**0.5
-                ang1 = np.rad2deg(np.arcsin(opp/hyp))
-                # determine if sufficent arc length has been achieved, or big curve coming, or end of path reached
-                if (arclen > arc_thresh) or abs(ang0-ang1) > turn_thresh or (ix == len(path) - 1):
-                    ix1 = ix
-                    p1 = complex(path[ix].end)
-                    c2 = complex(path[ix].control2)
-            else:
-                # we have something other than a CubicBezier (note that smoothing will elimate lines if done before this function!)
-                if p0 is not None:
-                    # but we started CubicBezier segment to combine
-                    #     case 1: we have only one bezier segment
-                    #             so we just set ix1 = ix0 and trip to combine segment below
-                    #     case 2: we have a few previous bezier segments
-                    #             we can assume previous segment was final cubic (or
-                    #             the algorithm would have reset to no points)
-                    
-                    ix1 = max(ix0, ix - 1)
-                    if ix1 > ix0:
-                        p1 = complex(path[ix1].end)
-                        c2 = complex(path[ix1].control2)
-                
-            # combine segments
-            if p1 is not None:
-                if ix0 != ix1:
-                    # combine the segments
-                    cpath.append(CubicBezier(p0,c1,c2,p1))
-                else:
-                    # this case catches the situation of a short CubicBezier followed by a non CubicBezier (e.g. Line)
-                    cpath.append(path[ix])
-                p0 = c1 = c2 = p1 = None
-                arclen = 0.0
-
-            # add segment to compressed path if not a cubic bezier
-            if not isinstance(path[ix], CubicBezier):
-                cpath.append(path[ix])
-                # reset points to initial condition
-                p0 = c1 = c2 = p1 = None
-
-            # keep consuming further segments
-            ix += 1
-        return cpath
-        
     def outline_path_features(self, bout_tol=0.1, corner_curve_tol=1.0):
         """Use properties of a Viola to establish bout locations and widths, corner locations, etc."""
         path = self.outline_path
@@ -459,7 +368,6 @@ class Viola(object):
         bot = POI(path, p=complex(top_left.x(),0))
 
         self.outline_feature_centerline = CL(bot, top_left, top_right, label="CL_")
-        print math.degrees(cmath.phase(bot.tangent()))
 
         # we need a vectorized function to find the tangent of a curve
         vec_f_tan = np.vectorize(lambda t:seg.unit_tangent(t))
@@ -467,15 +375,15 @@ class Viola(object):
         bouts = []
         corners = []
         seg = self.outline_path[0]
-        seg_prev_tan = np.average(vec_f_tan(np.linspace(0.0,1.0,10)))
+        seg_prev_tan = np.average(vec_f_tan(np.linspace(0.0, 1.0, 10)))
 
         # We sweep around all segements of the viol outline and nominate all possible bout features
         # to bouts[] based on a vertical unit tangent and corner features to corners[] based on
         # significant changes in direction.
         for ix, seg in enumerate(self.outline_path):
             # Points of interest:
-            #   1. Vertical lines (bouts) have curvature (0+-1j)
-            #   2. Horizontal lines (top & bottom) have curvature (+-1+0j)
+            #   1. Vertical lines (bouts) have curvature (0+-1j) or tangent (0, pi)
+            #   2. Horizontal lines (top & bottom) have curvature (+-1+0j) or tangent (pi/2, 3*pi/2)
             #   3. Corners have segment to segment jump of curvature > .5
 
             seg_tan = np.average(vec_f_tan(np.linspace(0.0,1.0,10)))
@@ -492,15 +400,15 @@ class Viola(object):
         #XXX there is an assumption of bouts laying within the viol terciles
         top = self.outline_feature_centerline.top_left.y()
         # Find the upper left and right bout points in upper third of scan
-        start, end=self.extrema_in_range(bouts,top*2.0/3.0,top)
+        start, end=path_extrema_t(self.outline_path,bouts,top*2.0/3.0,top)
         self.outline_feature_bout_upper = Bout(POI(path,start),POI(path,end),label="Bout_U")
 
         # Find the lower left and right bout points
-        start, end=self.extrema_in_range(bouts,0.0,top*1.0/3.0)
+        start, end=path_extrema_t(self.outline_path,bouts,0.0,top*1.0/3.0)
         self.outline_feature_bout_lower = Bout(POI(path,start),POI(path,end),label="Bout_L")
 
         # Find the middle left and right bout points
-        start, end=self.extrema_in_range(bouts,top*1.0/3.0,top*2.0/3.0, reverse=True)
+        start, end=path_extrema_t(self.outline_path,bouts,top*1.0/3.0,top*2.0/3.0, reverse=True)
         self.outline_feature_bout_middle = Bout(POI(path,start),POI(path,end),label="Bout_M")
 
         # Now we bracket our search based on bout locales to determine the real corners
@@ -509,7 +417,7 @@ class Viola(object):
         #XXX There could be residual segments above lower bout that are left/right of corner!
         bot = self.outline_feature_bout_lower.left.y()
         top = self.outline_feature_bout_middle.left.y()
-        start, end=self.extrema_in_range(corners,bot,top)
+        start, end=path_extrema_t(self.outline_path,corners,bot,top)
         self.outline_feature_corner_lower_left = POI(path,start,label="Corner_LL")
         self.outline_feature_corner_lower_right = POI(path,end,label="Corner_LR")
         #self.outline_feature_corner_lower_left_tangent = Tangent(path,start+.003)
@@ -525,7 +433,7 @@ class Viola(object):
         #XXX There could be residual segments below upper bout that are left/right of corner!
         bot = self.outline_feature_bout_middle.left.y()
         top = self.outline_feature_bout_upper.left.y()
-        start, end=self.extrema_in_range(corners,bot,top)
+        start, end=path_extrema_t(self.outline_path,corners,bot,top)
         self.outline_feature_corner_upper_left = POI(path,start,label="Corner_UL")
         self.outline_feature_corner_upper_right = POI(path,end,label="Corner_UR")
         #self.outline_feature_corner_upper_left_tangent = Tangent(path,start+.003)
@@ -631,7 +539,7 @@ class Viola(object):
             #    XXX but curvature depends on scale!
 
             # calculate clothoid twist entry angle and determine if clockwise or anticlockwise twist
-            rotation, clockwise  = twist_calc(p0,p1)
+            rotation, clockwise  = phase_delta(p0,p1)
             # estimate the scale based on arclength of bezier path
             if p1.T > p0.T:
                 arclen = self.outline_path.length(p0.T, p1.T)
@@ -735,8 +643,11 @@ class Viola(object):
         x = []
         y = []
         #sweep T in [0,1]
-        for t in np.linspace(0.0,1,500):
-            x.append(t)
+        for t in np.linspace(0.0,.5,250):
+            x.append((.5 - abs(self.outline_path.point(t).imag)/(2*388)))
+            y.append(abs(self.outline_path.point(t).real))
+        for t in np.linspace(0.5,1,250):
+            x.append((.5 + abs(self.outline_path.point(t).imag)/(2*388)))
             y.append(abs(self.outline_path.point(t).real))
         plot2.plot(x,y,'b-')
 
@@ -749,45 +660,6 @@ class Viola(object):
                 pass
 
         return plot
-
-    def extrema_in_range(self,seg_list,ymin,ymax,reverse=False):
-        """Based on svgpathtools function, but with bracketted search."""
-        #XXX This is just a utility function.  It should not be a class method
-        min_point = complex(0,0)
-        max_point = complex(0,0)
-        if not reverse:
-            min_extreme = 0.0
-            max_extreme = 0.0
-        else:
-            min_extreme = -1.0e99   # a small number
-            max_extreme = 1.0e99    # a big number
-
-        for ix in seg_list:
-            seg = self.outline_path[ix]
-            # only consider segments in the selected range
-            if seg.start.imag > ymin and seg.start.imag < ymax:
-                t_min, t_max = bez_extrema_t(seg)
-                p_min = seg.point(t_min)
-                p_max = seg.point(t_max)
-                if not reverse:
-                    if p_min.real < min_extreme:
-                        min_point = self.outline_path.t2T(ix,t_min)
-                        min_extreme = p_min.real
-                    if p_max.real > max_extreme:
-                        max_point = self.outline_path.t2T(ix,t_max)
-                        max_extreme = p_max.real
-                else:
-                    # if we are left of centerline, we want to return p_max
-                    if seg.start.real < 0:
-                        if p_max.real > min_extreme:
-                            min_point = self.outline_path.t2T(ix,t_max)
-                            min_extreme = p_max.real
-                    else:
-                    # otherwise we want to return p_min
-                        if p_min.real < max_extreme:
-                            max_point = self.outline_path.t2T(ix,t_min)
-                            max_extreme = p_min.real
-        return min_point, max_point
 
     def to_json(self):
         """Cheap way to store viol definition in a public, language independent, manner."""
@@ -808,6 +680,95 @@ def path_slice(path, T0=0.0, T1=1.0):
     path_slice[-1] = bpoints2bezier(split_bezier(path[end].bpoints(),t1)[0])
 
     return path_slice
+    
+def path_smooth(path):
+    """Every adjoining segment starting handle and the previous segment ending handle is set to
+    the average of the two handles."""
+    for ix,seg in enumerate(path):
+        if not isinstance(seg, CubicBezier):
+            p0 = complex(seg.start)
+            p1 = complex(seg.end)
+            c1 = p0 + .30 * (p1 - p0)/seg.length()      # put control1 handle 30% of the way to end point
+            c2 = p0 + .70 * (p1 - p0)/seg.length()      # put control2 handle 70% of the way to end point
+            path[ix] = CubicBezier(p0, c1, c2, p1)      # simply a straight line with control points in line
+            seg = path[ix]
+            
+        vec1 = path[ix-1].end - path[ix-1].control2
+        vec2 = seg.control1 - seg.start
+        new = vec1+vec2/2.0
+        path[ix].control1 = seg.start + new
+        path[ix-1].control2 = path[ix-1].end - new
+    return path
+
+def path_compress(path, arc_thresh=5.0, turn_thresh=30):
+    """Combine adjacent bezier curves if the curvature is low.  Don't combine more than arc_thresh arc length."""
+    cpath = Path()
+    ix = 0
+    p0 = c1 = c2 = p1 = None
+    arclen = 0.0
+    while ix < len(path):
+        # add a segment to combine
+        if isinstance(path[ix], CubicBezier):
+            if p0 is None:
+                ix0 = ix
+                p0 = complex(path[ix].start)
+                c1 = complex(path[ix].control1)
+
+            # XXX Should we increase magnitude of p0->c1? for each additional segment?
+
+            # add on the segments arc length
+            arclen += path[ix].length()
+
+            # XXX Check here if the next segment is big turn, in which case terminate
+            # calculate curvature relative to previous segment based on endpoint
+            opp = path[ix-1].end.real - path[ix-1].start.real
+            adj = path[ix-1].end.imag - path[ix-1].start.imag
+            hyp = (opp**2 + adj**2)**0.5
+            ang0 = np.rad2deg(np.arcsin(opp/hyp))
+            opp = path[ix].end.real - path[ix].start.real
+            adj = path[ix].end.imag - path[ix].start.imag
+            hyp = (opp**2 + adj**2)**0.5
+            ang1 = np.rad2deg(np.arcsin(opp/hyp))
+            # determine if sufficent arc length has been achieved, or big curve coming, or end of path reached
+            if (arclen > arc_thresh) or abs(ang0-ang1) > turn_thresh or (ix == len(path) - 1):
+                ix1 = ix
+                p1 = complex(path[ix].end)
+                c2 = complex(path[ix].control2)
+        else:
+            # we have something other than a CubicBezier (note that smoothing will elimate lines if done before this function!)
+            if p0 is not None:
+                # but we started CubicBezier segment to combine
+                #     case 1: we have only one bezier segment
+                #             so we just set ix1 = ix0 and trip to combine segment below
+                #     case 2: we have a few previous bezier segments
+                #             we can assume previous segment was final cubic (or
+                #             the algorithm would have reset to no points)
+                
+                ix1 = max(ix0, ix - 1)
+                if ix1 > ix0:
+                    p1 = complex(path[ix1].end)
+                    c2 = complex(path[ix1].control2)
+            
+        # combine segments
+        if p1 is not None:
+            if ix0 != ix1:
+                # combine the segments
+                cpath.append(CubicBezier(p0,c1,c2,p1))
+            else:
+                # this case catches the situation of a short CubicBezier followed by a non CubicBezier (e.g. Line)
+                cpath.append(path[ix])
+            p0 = c1 = c2 = p1 = None
+            arclen = 0.0
+
+        # add segment to compressed path if not a cubic bezier
+        if not isinstance(path[ix], CubicBezier):
+            cpath.append(path[ix])
+            # reset points to initial condition
+            p0 = c1 = c2 = p1 = None
+
+        # keep consuming further segments
+        ix += 1
+    return cpath
     
 def path_curvature(t1, path):
     delta=0.02
@@ -838,22 +799,52 @@ def path_find_curvature_min(path, T0=0.0, T1=1.0):
     # search the path for smallest curvature
     return minimize_scalar(path_curvature, bounds=(T0, T1), args=(path), method='bounded', options={'xatol': 1e-5,'disp':0}).x
 
-def phase_delta_min(p1, p2):
-    """Find the minimum angular distance between two angles. Result is [-pi,pi]."""
-    return math.atan2(math.sin(p1-p2), math.cos(p1-p2))
+def path_compare(path, path_t0, path_t1, clothoid, clothoid_t0, clothoid_t1, nodes=100):
+    tvec_path = np.linspace(path_t0,path_t1,nodes)
+    tvec_clothoid = np.linspace(clothoid_t0,clothoid_t1,nodes)
+    bez = np.array([path.point(t) for t in tvec_path])
+    clo = np.array([clothoid.p(t) for t in tvec_clothoid])
+    print bez
+    print clo
+    print bez - clo
 
-def twist_calc(p0, p1):
-    phi = (cmath.phase(p0.tangent()) + 2 * cmath.pi) % (2 * cmath.pi)
-    phi2 = (phi + cmath.pi) % (2 * cmath.pi)
-    tan = (cmath.phase(p1.p() - p0.p()) + 2 * cmath.pi) % (2 * cmath.pi)
+def path_extrema_t(path, seg_list, ymin=0.0, ymax=1.0, reverse=False):
+    """Based on svgpathtools function, but with bracketted search."""
+    min_point = complex(0,0)
+    max_point = complex(0,0)
+    if not reverse:
+        min_extreme = 0.0
+        max_extreme = 0.0
+    else:
+        min_extreme = -1.0e99   # a small number
+        max_extreme = 1.0e99    # a big number
 
-    if abs(phase_delta_min(phi2, tan)) < abs(phase_delta_min(phi, tan)):
-        phi = phi2
-
-    # determine if the clothoid should be clockwise or counterclockwise
-    clockwise = (phase_delta_min(phi, tan) > 0)
-
-    return phi, clockwise
+    for ix in seg_list:
+        seg = path[ix]
+        # only consider segments in the selected range
+        if seg.start.imag > ymin and seg.start.imag < ymax:
+            t_min, t_max = bez_extrema_t(seg)
+            p_min = seg.point(t_min)
+            p_max = seg.point(t_max)
+            if not reverse:
+                if p_min.real < min_extreme:
+                    min_point = path.t2T(ix,t_min)
+                    min_extreme = p_min.real
+                if p_max.real > max_extreme:
+                    max_point = path.t2T(ix,t_max)
+                    max_extreme = p_max.real
+            else:
+                # if we are left of centerline, we want to return p_max
+                if seg.start.real < 0:
+                    if p_max.real > min_extreme:
+                        min_point = path.t2T(ix,t_max)
+                        min_extreme = p_max.real
+                else:
+                # otherwise we want to return p_min
+                    if p_min.real < max_extreme:
+                        max_point = path.t2T(ix,t_min)
+                        max_extreme = p_min.real
+    return min_point, max_point
 
 def bez_extrema_t(b):
     """Returns the minimum and maximum t values for the real axis (x) of a cubic bezier."""
@@ -907,29 +898,32 @@ def bez_extrema_t(b):
             t_min = t
     return t_min, t_max
 
-def path_compare(path, path_t0, path_t1, clothoid, clothoid_t0, clothoid_t1, nodes=100):
-    tvec_path = np.linspace(path_t0,path_t1,nodes)
-    tvec_clothoid = np.linspace(clothoid_t0,clothoid_t1,nodes)
-    bez = np.array([path.point(t) for t in tvec_path])
-    clo = np.array([clothoid.p(t) for t in tvec_clothoid])
-    print bez
-    print clo
-    print bez - clo
+def phase_delta(p0, p1):
+    phi = (cmath.phase(p0.tangent()) + 2 * cmath.pi) % (2 * cmath.pi)
+    phi2 = (phi + cmath.pi) % (2 * cmath.pi)
+    tan = (cmath.phase(p1.p() - p0.p()) + 2 * cmath.pi) % (2 * cmath.pi)
+
+    if abs(phase_delta_min(phi2, tan)) < abs(phase_delta_min(phi, tan)):
+        phi = phi2
+
+    # determine if the clothoid should be clockwise or counterclockwise
+    clockwise = (phase_delta_min(phi, tan) > 0)
+
+    return phi, clockwise
+
+def phase_delta_min(p1, p2):
+    """Find the minimum angular distance between two angles. Result is [-pi,pi]."""
+    return math.atan2(math.sin(p1-p2), math.cos(p1-p2))
 
 # Main entry point
 #
 
 viola = Viola()
-viola.scan("clean.png")
-viola.outline_path = viola.path_smooth()
-viola.outline_path = viola.outline_path_compress()
-viola.outline_path_features()
-viola.outline_clothoids_find()
+viola.body_scan("clean.png")
+
+viola.plot()
 viola.plot_curvature()
 
-print "yea: ", path_find_curvature_min(viola.outline_path, .21, .24)
-
-plt = viola.plot()
 plt.show(block=False)
 raw_input('<cr> to close program ->')
 plt.close()
