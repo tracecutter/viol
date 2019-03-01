@@ -626,7 +626,7 @@ class Viola(object):
                 adj = 0
 
             if p0 is self.outline_feature_bout_middle.left:
-                p0 = POI(self.outline_path, T=0.225)
+                p0 = POI(self.outline_path, T=0.2247112)
             #    t0 = (curvature == .012)
             #    XXX but curvature depends on scale!
 
@@ -725,21 +725,11 @@ class Viola(object):
 
         x = []
         y = []
-        #sweep T in [T-.01, T, T+.01]
+        #sweep T in [0, T+.02, T+.04]
         delta = 0.02
         for t0 in np.linspace(0.0,1.0 - (2 * delta),500):
-            t1 = t0 + delta
-            t2 = t1 + delta
-            p0 = self.outline_path.point(t0)
-            p1 = self.outline_path.point(t1)
-            p2 = self.outline_path.point(t2)
-            pm = p0 + ((p2 - p0) / 2)
-            w = np.linalg.norm(p2-p0)
-            h = np.linalg.norm(p1-pm)
-            r = (h/2) + (w**2/(8*h))
-            k =  1/r
-            x.append(t1)
-            y.append(k)
+            x.append(t0+delta)
+            y.append(path_curvature(t0,self.outline_path))
         plot.plot(x,y,'r-')
 
         x = []
@@ -819,15 +809,34 @@ def path_slice(path, T0=0.0, T1=1.0):
 
     return path_slice
     
+def path_curvature(t1, path):
+    delta=0.02
+    t0 = t1 - delta
+    t2 = t1 + delta
+    p0 = path.point(t0)
+    p1 = path.point(t1)
+    p2 = path.point(t2)
+    pm = p0 + ((p2 - p0) / 2)
+    w = np.linalg.norm(p2-p0)
+    h = np.linalg.norm(p1-pm)
+    r = (h/2) + (w**2/(8*h))
+    k =  1/r
+
+    return k
+
 def path_find_slope(path, T0=0.0, T1=1.0, phi=None):
-    """Find the segment where the slope exists within it based on segment end points
-    this avoids being tricked by a local minima in another segment."""
+    """Find the point on a path between T0 and T1 where the slope matches phi."""
     if phi is None:
         phi = cmath.pi/4.0
 
     # search the path for the precise point where slope is phi
     f = lambda t,slope:cmath.phase(path.unit_tangent(t))-slope
     return brentq(f, T0, T1, args=(phi))
+
+def path_find_curvature_min(path, T0=0.0, T1=1.0):
+    """Find the point on a path between T0 and T1 where the curvature is smallest."""
+    # search the path for smallest curvature
+    return minimize_scalar(path_curvature, bounds=(T0, T1), args=(path), method='bounded', options={'xatol': 1e-5,'disp':0}).x
 
 def phase_delta_min(p1, p2):
     """Find the minimum angular distance between two angles. Result is [-pi,pi]."""
@@ -917,6 +926,8 @@ viola.outline_path = viola.outline_path_compress()
 viola.outline_path_features()
 viola.outline_clothoids_find()
 viola.plot_curvature()
+
+print "yea: ", path_find_curvature_min(viola.outline_path, .21, .24)
 
 plt = viola.plot()
 plt.show(block=False)
