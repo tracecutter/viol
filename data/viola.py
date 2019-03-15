@@ -1,30 +1,24 @@
 #!/usr/bin/env python
 
-import os
-from collections import namedtuple
 import tempfile
 import json
 import jsonpickle
-import copy
+import math
 import cmath
 import numpy as np
-from scipy.special import fresnel
-from scipy.spatial import distance
-from scipy.optimize import minimize_scalar
 import matplotlib.pyplot as plt
-from matplotlib.figure import SubplotParams
-import math
-from math import ceil, log, sqrt
 
+from time import sleep
+from timeit import default_timer as timer
+from matplotlib.figure import SubplotParams
+from scipy.special import fresnel
+from scipy.optimize import minimize_scalar
 from io import BytesIO
 from subprocess import Popen, PIPE, STDOUT
-from PIL import Image, ImageFilter
-from svgpathtools import Path, Line, CubicBezier, parse_path, svg2paths, svg2paths2
-from svgpathtools import wsvg, disvg, bezier_point, bezier2polynomial, polynomial2bezier
-from svgpathtools import bpoints2bezier, kinks, smoothed_path, split_bezier
+from PIL import Image
+from svgpathtools import Path, Line, CubicBezier, svg2paths2, wsvg, disvg
+from svgpathtools import bezier_point, bezier2polynomial, polynomial2bezier, bpoints2bezier, split_bezier
 from svgpathtools.polytools import polyroots01
-from timeit import default_timer as timer
-from time import sleep
 
 
 class Clothoid(object):
@@ -66,7 +60,6 @@ class Clothoid(object):
         result = result[:-2]
         result += ")>"
         return result
-
 
     def vectors(self):
         t = np.linspace(self.T0, self.T, 1000)
@@ -161,7 +154,7 @@ class Point(object):
 class POI(object):
     """A point of interest."""
     def __init__(self, path, T=0, p=None, label=None):
-        self.path = path
+        self.path = path    # XXX Carrying a reference to the path make the JSON pickle large!
         self.label = label
         if p is not None:
             self.T = path_closest_t(path,p)
@@ -216,6 +209,9 @@ class POI(object):
         if self.label is not None:
             plot.annotate(self.label, xy=(self.T,0), xytext=(self.T,0), rotation=90,
                           verticalalignment='bottom',horizontalalignment='center')
+
+    def plot_tangent(self, plot, color='b--'):
+        Tangent(self.path,self.T).plot(plot, color)
 
 class Tangent(object):
     """A unit tangent on a path at T"""
@@ -297,6 +293,10 @@ class Bout(object):
             plot.annotate(self.label+"R", xy=(self.right.T,0), xytext=(self.right.T,0), rotation=90,
                           verticalalignment='bottom',horizontalalignment='center')
 
+    def plot_tangent(self, plot, color='b--'):
+        self.left.plot_tangent(plot, color)
+        self.right.plot_tangent(plot, color)
+
 class Corner(object):
     """A corner POI."""
     def __init__(self, poi):
@@ -376,78 +376,9 @@ class CL(object):
             plot.annotate(self.label+"B", xy=(self.bot.T,0), xytext=(self.bot.T,0), rotation=90,
                           verticalalignment='bottom',horizontalalignment='center')
 
-class Corners(object):
-    """A set of viola body corners."""
-    def __init__(self, path, bouts, corner_curve_tol=0.1):
-        # we need a vectorized function to find the tangent of a curve
-        vec_f_tan = np.vectorize(lambda t:seg.unit_tangent(t))
-
-        corners = []
-        seg = path[0]
-        seg_prev_tan = np.average(vec_f_tan(np.linspace(0.0, 1.0, 10)))
-
-        # We sweep around all segements of the viol body and nominate all possible corner features to corners[] based on
-        # significant changes in direction. Corners have segment to segment jump of curvature > .5.
-        for ix, seg in enumerate(path):
-            seg_tan = np.average(vec_f_tan(np.linspace(0.0,1.0,10)))
-            d_real = max(seg_tan.real,seg_prev_tan.real) - min(seg_tan.real,seg_prev_tan.real)
-            d_imag = max(seg_tan.imag,seg_prev_tan.imag) - min(seg_tan.imag,seg_prev_tan.imag)
-            if (abs(d_real) + abs(d_imag) > corner_curve_tol):
-                corners.append(ix)
-            seg_prev_tan = seg_tan
-
-        # Now we bracket our search based on bout locales to determine the real corners
-
-        # Find the lower corners
-        bot = bouts.lower.left.y()
-        top = bouts.middle.left.y()
-        start, end=path_extrema_t(path,corners,bot,top)
-        self.lower_left = POI(path,start,label="Corner_LL")
-        self.lower_right = POI(path,end,label="Corner_LR")
-
-        # Find the upper corners
-        bot = bouts.middle.left.y()
-        top = bouts.upper.left.y()
-        start, end=path_extrema_t(path,corners,bot,top)
-        self.upper_left = POI(path,start,label="Corner_UL")
-        self.upper_right = POI(path,end,label="Corner_UR")
-
-    def __repr__(self):
-        # Generator to filter which properties to show.
-        # This example excludes properties prefixed with "_" and methods.
-        def filter_props(obj):
-            props = sorted(obj.__dict__.keys())
-            for prop in props:
-                if not callable(prop) and prop[0] != "_":
-                    yield (prop, getattr(obj, prop))
-            return
-        prop_tuples = filter_props(self)
-        result = "<" + self.__class__.__name__ + "("
-        for prop in prop_tuples:
-            result += prop[0].__str__() + "="
-            # Stylize (if desired) the output based on the type.
-            # This example shortens floating point values to three decimal places.
-            if isinstance(prop[1], float):
-                result += "{:.3f}, ".format(prop[1])
-            else:
-                result += prop[1].__repr__() + ", "
-
-        result = result[:-2]
-        result += ")>"
-        return result
-
-    def plot(self, plot, color='b^'):
-        self.upper_left.plot(plot, color)
-        self.lower_left.plot(plot, color)
-        self.lower_right.plot(plot, color)
-        self.upper_right.plot(plot, color)
-
-    def plot_t(self, plot, color='b--'):
-        self.upper_left.plot_t(plot, color)
-        self.lower_left.plot_t(plot, color)
-        self.lower_right.plot_t(plot, color)
-        self.upper_right.plot_t(plot, color)
-
+    def plot_tangent(self, plot, color='b--'):
+        self.top_left.plot_tangent(plot, color)
+        self.bot.plot_tangent(plot, color)
 
 class Bouts(object):
     """A set of viola body bouts."""
@@ -530,37 +461,46 @@ class Bouts(object):
         self.middle.plot_t(plot, color)
         self.lower.plot_t(plot, color)
 
-class Turns(object):
-    """A set of viola turning points where arc reverses (ie. clockwise to counter clockwise)."""
-    def __init__(self, path):
-        # Now we bracket our search based on bouts and corners to find the turns (change of direction)
-        # This occurs at the point where the tangent is minimally orthogonal to the x axis
+    def plot_tangent(self, plot, color='b--'):
+        self.upper.plot_tangent(plot, color)
+        self.middle.plot_tangent(plot, color)
+        self.lower.plot_tangent(plot, color)
 
-        f = lambda t:abs(path.unit_tangent(t).imag/path.unit_tangent(t).real)
+class Corners(object):
+    """A set of viola body corners."""
+    def __init__(self, path, bouts, corner_curve_tol=0.1):
+        # we need a vectorized function to find the tangent of a curve XXX  Really?!
+        vec_f_tan = np.vectorize(lambda t:seg.unit_tangent(t))
 
-        T0 = self.feature_bouts.upper.left.T
-        T1 = self.feature_corners.upper_left.T
-        T = minimize_scalar(f, bounds=(T0, T1), method='bounded', options={'xatol': 1e-5,'disp':0}).x
-        self.feature_turn_upper_left = POI(path,T,label="Turn_UL")
-        #self.feature_turn_ul_tangent = Tangent(path,T)
+        corners = []
+        seg = path[0]
+        seg_prev_tan = np.average(vec_f_tan(np.linspace(0.0, 1.0, 10)))
 
-        T0 = self.feature_corners.lower_left.T
-        T1 = self.feature_bouts.lower.left.T
-        T = minimize_scalar(f, bounds=(T0, T1), method='bounded', options={'xatol': 1e-5,'disp':0}).x
-        self.feature_turn_lower_left = POI(path,T,label="Turn_LL")
-        #self.feature_turn_ll_tangent = Tangent(path,T)
+        # We sweep around all segements of the viol body and nominate all possible corner features to corners[] based on
+        # significant changes in direction. Corners have segment to segment jump of curvature > .5.
+        for ix, seg in enumerate(path):
+            seg_tan = np.average(vec_f_tan(np.linspace(0.0,1.0,10)))
+            d_real = max(seg_tan.real,seg_prev_tan.real) - min(seg_tan.real,seg_prev_tan.real)
+            d_imag = max(seg_tan.imag,seg_prev_tan.imag) - min(seg_tan.imag,seg_prev_tan.imag)
+            if (abs(d_real) + abs(d_imag) > corner_curve_tol):
+                corners.append(ix)
+            seg_prev_tan = seg_tan
 
-        T0 = self.feature_bouts.lower.right.T
-        T1 = self.feature_corners.lower_right.T
-        T = minimize_scalar(f, bounds=(T0, T1), method='bounded', options={'xatol': 1e-5,'disp':0}).x
-        self.feature_turn_lower_right = POI(path,T,label="Turn_LR")
-        #self.feature_turn_lr_tangent = Tangent(path,T)
+        # Now we bracket our search based on bout locales to determine the real corners
 
-        T0 = self.feature_corners.upper_right.T
-        T1 = self.feature_bouts.upper.right.T
-        T = minimize_scalar(f, bounds=(T0, T1), method='bounded', options={'xatol': 1e-5,'disp':0}).x
-        self.feature_turn_upper_right = POI(path,T,label="Turn_UR")
-        #self.feature_turn_ur_tangent = Tangent(path,T)
+        # Find the lower corners
+        bot = bouts.lower.left.y()
+        top = bouts.middle.left.y()
+        start, end=path_extrema_t(path,corners,bot,top)
+        self.lower_left = POI(path,start,label="Corner_LL")
+        self.lower_right = POI(path,end,label="Corner_LR")
+
+        # Find the upper corners
+        bot = bouts.middle.left.y()
+        top = bouts.upper.left.y()
+        start, end=path_extrema_t(path,corners,bot,top)
+        self.upper_left = POI(path,start,label="Corner_UL")
+        self.upper_right = POI(path,end,label="Corner_UR")
 
     def __repr__(self):
         # Generator to filter which properties to show.
@@ -586,15 +526,93 @@ class Turns(object):
         result += ")>"
         return result
 
-    def plot(self, plot, color='r-'):
-        self.upper.plot(plot, color)
-        self.middle.plot(plot, color)
-        self.lower.plot(plot, color)
+    def plot(self, plot, color='b^'):
+        self.upper_left.plot(plot, color)
+        self.lower_left.plot(plot, color)
+        self.lower_right.plot(plot, color)
+        self.upper_right.plot(plot, color)
 
     def plot_t(self, plot, color='b--'):
-        self.upper.plot_t(plot, color)
-        self.middle.plot_t(plot, color)
-        self.lower.plot_t(plot, color)
+        self.upper_left.plot_t(plot, color)
+        self.lower_left.plot_t(plot, color)
+        self.lower_right.plot_t(plot, color)
+        self.upper_right.plot_t(plot, color)
+
+    def plot_tangent(self, plot, color='b--'):
+        self.upper_left.plot_tangent(plot, color)
+        self.lower_left.plot_tangent(plot, color)
+        self.upper_right.plot_tangent(plot, color)
+        self.lower_right.plot_tangent(plot, color)
+
+class Turns(object):
+    """A set of viola turning points where arc reverses (ie. clockwise to counter clockwise)."""
+    def __init__(self, path, bouts, corners):
+        # Now we bracket our search based on bouts and corners to find the turns (change of direction)
+        # This occurs at the point where the tangent is minimally orthogonal to the x axis
+
+        f = lambda t:abs(path.unit_tangent(t).imag/path.unit_tangent(t).real)
+
+        T0 = bouts.upper.left.T
+        T1 = corners.upper_left.T
+        T = minimize_scalar(f, bounds=(T0, T1), method='bounded', options={'xatol': 1e-5,'disp':0}).x
+        self.upper_left = POI(path,T,label="Turn_UL")
+
+        T0 = corners.lower_left.T
+        T1 = bouts.lower.left.T
+        T = minimize_scalar(f, bounds=(T0, T1), method='bounded', options={'xatol': 1e-5,'disp':0}).x
+        self.lower_left = POI(path,T,label="Turn_LL")
+
+        T0 = bouts.lower.right.T
+        T1 = corners.lower_right.T
+        T = minimize_scalar(f, bounds=(T0, T1), method='bounded', options={'xatol': 1e-5,'disp':0}).x
+        self.lower_right = POI(path,T,label="Turn_LR")
+
+        T0 = corners.upper_right.T
+        T1 = bouts.upper.right.T
+        T = minimize_scalar(f, bounds=(T0, T1), method='bounded', options={'xatol': 1e-5,'disp':0}).x
+        self.upper_right = POI(path,T,label="Turn_UR")
+
+    def __repr__(self):
+        # Generator to filter which properties to show.
+        # This example excludes properties prefixed with "_" and methods.
+        def filter_props(obj):
+            props = sorted(obj.__dict__.keys())
+            for prop in props:
+                if not callable(prop) and prop[0] != "_":
+                    yield (prop, getattr(obj, prop))
+            return
+        prop_tuples = filter_props(self)
+        result = "<" + self.__class__.__name__ + "("
+        for prop in prop_tuples:
+            result += prop[0].__str__() + "="
+            # Stylize (if desired) the output based on the type.
+            # This example shortens floating point values to three decimal places.
+            if isinstance(prop[1], float):
+                result += "{:.3f}, ".format(prop[1])
+            else:
+                result += prop[1].__repr__() + ", "
+
+        result = result[:-2]
+        result += ")>"
+        return result
+
+    def plot(self, plot, color='b^'):
+        self.upper_left.plot(plot, color)
+        self.lower_left.plot(plot, color)
+        self.lower_right.plot(plot, color)
+        self.upper_right.plot(plot, color)
+
+    def plot_t(self, plot, color='b--'):
+        self.upper_left.plot_t(plot, color)
+        self.lower_left.plot_t(plot, color)
+        self.lower_right.plot_t(plot, color)
+        self.upper_right.plot_t(plot, color)
+
+    def plot_tangent(self, plot, color='b--'):
+        self.upper_left.plot_tangent(plot, color)
+        self.lower_left.plot_tangent(plot, color)
+        self.upper_right.plot_tangent(plot, color)
+        self.lower_right.plot_tangent(plot, color)
 
 class Body(object):
     """A Viola subcomponent class of the instrument body geometry, features, and attributes."""
@@ -610,14 +628,7 @@ class Body(object):
         self.feature_centerline = None
         self.feature_bouts = None
         self.feature_corners = None
-        self.feature_turn_upper_left = None
-        self.feature_turn_lower_left = None
-        self.feature_turn_lower_right = None
-        self.feature_turn_upper_right = None
-        self.feature_turn_ul_tangent = None
-        self.feature_turn_ll_tangent = None
-        self.feature_turn_lr_tangent = None
-        self.feature_turn_ur_tangent = None
+        self.feature_turns = None
         self.feature_45_upper_left = None
         self.feature_45_lower_left = None
         self.feature_45_lower_right = None
@@ -730,7 +741,7 @@ class Body(object):
 
         xmin, xmax, ymin, ymax = path.bbox()                    # use a bounding box to determine x,y extremi
         xshift = path.point(0.0).real                           # T=0 appears to find top most point
-        scale = 1000.0 / 10.0**(ceil(np.log10(ymax - ymin)))    # calculate scaling factor for pixel == 0.1mm
+        scale = 1000.0 / 10.0**(math.ceil(np.log10(ymax-ymin))) # calculate scaling factor for pixel == 0.1mm
         path = path.translated(complex(-xshift, -ymin))         # complex translation vector
         path = path.scaled(scale)                               # scale path to 10 pixels/mm (curves get detached)
         for ix, seg in enumerate(path[:-1]):
@@ -750,87 +761,54 @@ class Body(object):
 
     def features_find(self, bout_tol=0.1, corner_curve_tol=1.0):
         """Use properties of a Viola to establish bout locations and widths, corner locations, etc."""
-        path = self.path
-
         # establish the viol centerline
-        self.feature_centerline = CL(path, label="CL_")
+        self.feature_centerline = CL(self.path, label="CL_")
         self.feature_bouts = Bouts(self.path, bout_tol)                                 # find the bouts
         self.feature_corners = Corners(self.path, self.feature_bouts, corner_curve_tol) # find the corners
-
-        # Now we bracket our search based on bouts and corners to find the turns (change of direction)
-        # This occurs at the point where the tangent is minimally orthogonal to the x axis
-
-        f = lambda t:abs(path.unit_tangent(t).imag/path.unit_tangent(t).real)
-
-        T0 = self.feature_bouts.upper.left.T
-        T1 = self.feature_corners.upper_left.T
-        T = minimize_scalar(f, bounds=(T0, T1), method='bounded', options={'xatol': 1e-5,'disp':0}).x
-        self.feature_turn_upper_left = POI(path,T,label="Turn_UL")
-        #self.feature_turn_ul_tangent = Tangent(path,T)
-
-        T0 = self.feature_corners.lower_left.T
-        T1 = self.feature_bouts.lower.left.T
-        T = minimize_scalar(f, bounds=(T0, T1), method='bounded', options={'xatol': 1e-5,'disp':0}).x
-        self.feature_turn_lower_left = POI(path,T,label="Turn_LL")
-        #self.feature_turn_ll_tangent = Tangent(path,T)
-
-        T0 = self.feature_bouts.lower.right.T
-        T1 = self.feature_corners.lower_right.T
-        T = minimize_scalar(f, bounds=(T0, T1), method='bounded', options={'xatol': 1e-5,'disp':0}).x
-        self.feature_turn_lower_right = POI(path,T,label="Turn_LR")
-        #self.feature_turn_lr_tangent = Tangent(path,T)
-
-        T0 = self.feature_corners.upper_right.T
-        T1 = self.feature_bouts.upper.right.T
-        T = minimize_scalar(f, bounds=(T0, T1), method='bounded', options={'xatol': 1e-5,'disp':0}).x
-        self.feature_turn_upper_right = POI(path,T,label="Turn_UR")
-        #self.feature_turn_ur_tangent = Tangent(path,T)
-
-        # Now we search for the 45 degree slopes on upper and lower corners (where the clothoids join)
-
-        T0=0.015
-        T1=self.feature_bouts.upper.left.T - 0.015
-        T = path_find_slope(path, T0, T1, phi=-3.0*cmath.pi/4.0)
-        self.feature_45_upper_left = POI(path,T,label="45_UL")
-        #self.feature_45_upper_left_tangent = Tangent(path,T)
-
-        T0 = self.feature_bouts.lower.left.T + 0.015
-        T1 = self.feature_centerline.bot.T - 0.015
-        T = path_find_slope(path, T0, T1, phi=-cmath.pi/4.0)
-        self.feature_45_lower_left = POI(path,T,label="45_LL")
-        #self.feature_45_lower_left_tangent = Tangent(path,T)
-
-        T0 = self.feature_centerline.bot.T + 0.015
-        T1 = self.feature_bouts.lower.right.T -0.015
-        T = path_find_slope(path, T0, T1, phi=cmath.pi/4.0)
-        self.feature_45_lower_right = POI(path,T,label="45_LR")
-        #self.feature_45_lower_right_tangent = Tangent(path,T)
-
-        T0 = self.feature_bouts.upper.right.T + 0.015
-        T1 = self.feature_centerline.top_right.T - 0.015
-        T = path_find_slope(path, T0, T1, phi=3*cmath.pi/4.0)
-        self.feature_45_upper_right = POI(path,T,label="45_UR")
-        #self.feature_45_upper_right_tangent = Tangent(path,T)
+        self.feature_turns = Turns(self.path, self.feature_bouts, self.feature_corners) # find the turns
 
     def clothoids_find(self):
         """Define a set of clothoids based on path features."""
+        # Now we search for four clothoid joins to yield best curve fit
+        # XXX The joins should be based on curvature minima and not arbitrarily at 45 degrees.
+
+        T0=0.015
+        T1=self.feature_bouts.upper.left.T - 0.015
+        T = path_find_slope(self.path, T0, T1, phi=-3.0*cmath.pi/4.0)
+        self.feature_45_upper_left = POI(self.path,T,label="45_UL")
+
+        T0 = self.feature_bouts.lower.left.T + 0.015
+        T1 = self.feature_centerline.bot.T - 0.015
+        T = path_find_slope(self.path, T0, T1, phi=-cmath.pi/4.0)
+        self.feature_45_lower_left = POI(self.path,T,label="45_LL")
+
+        T0 = self.feature_centerline.bot.T + 0.015
+        T1 = self.feature_bouts.lower.right.T -0.015
+        T = path_find_slope(self.path, T0, T1, phi=cmath.pi/4.0)
+        self.feature_45_lower_right = POI(self.path,T,label="45_LR")
+
+        T0 = self.feature_bouts.upper.right.T + 0.015
+        T1 = self.feature_centerline.top_right.T - 0.015
+        T = path_find_slope(self.path, T0, T1, phi=3*cmath.pi/4.0)
+        self.feature_45_upper_right = POI(self.path,T,label="45_UR")
+
         #XXX I can't think of an obvious way to make this less ugly! A global dictionary?!
         clist = [
             [self.feature_centerline.top_left, self.feature_45_upper_left],
-            [self.feature_turn_upper_left, self.feature_45_upper_left],
-            [self.feature_turn_upper_left, self.feature_corners.upper_left],
+            [self.feature_turns.upper_left, self.feature_45_upper_left],
+            [self.feature_turns.upper_left, self.feature_corners.upper_left],
             [self.feature_bouts.middle.left, self.feature_corners.upper_left],
             [self.feature_bouts.middle.left, self.feature_corners.lower_left],
-            [self.feature_turn_lower_left, self.feature_corners.lower_left],
-            [self.feature_turn_lower_left, self.feature_45_lower_left],
+            [self.feature_turns.lower_left, self.feature_corners.lower_left],
+            [self.feature_turns.lower_left, self.feature_45_lower_left],
             [self.feature_centerline.bot, self.feature_45_lower_left],
             [self.feature_centerline.bot, self.feature_45_lower_right],
-            [self.feature_turn_lower_right, self.feature_45_lower_right],
-            [self.feature_turn_lower_right, self.feature_corners.lower_right],
+            [self.feature_turns.lower_right, self.feature_45_lower_right],
+            [self.feature_turns.lower_right, self.feature_corners.lower_right],
             [self.feature_bouts.middle.right, self.feature_corners.lower_right],
             [self.feature_bouts.middle.right, self.feature_corners.upper_right],
-            [self.feature_turn_upper_right, self.feature_corners.upper_right],
-            [self.feature_turn_upper_right, self.feature_45_upper_right],
+            [self.feature_turns.upper_right, self.feature_corners.upper_right],
+            [self.feature_turns.upper_right, self.feature_45_upper_right],
             [self.feature_centerline.top_right, self.feature_45_upper_right]
         ]
 
@@ -898,7 +876,7 @@ class Body(object):
     def inspect (self, T=0):
         self.inspects.append(POI(self.path, T))
 
-    def plot (self, plot=None):
+    def plot (self, plot=None, plot_tangents=False):
         """Plot a viola using matplotlib.  Note this does not display the plot."""
         #XXX This function needs color arguments
         #XXX This function needs plot size and axis arguments
@@ -913,6 +891,8 @@ class Body(object):
         for feature in features:
             try:
                 getattr(self, feature).plot(plot)
+                if plot_tangents:
+                    getattr(self, feature).plot_tangent(plot)
             except AttributeError:
                 pass
 
@@ -1039,8 +1019,8 @@ class Viola(object):
     def body_scan(self, imageFile, dpi=300, threshold=205, despeckle=10):
         self.body.scan(imageFile, dpi, threshold, despeckle)
 
-    def plot(self, plot=None):
-        self.body.plot(plot)
+    def plot(self, plot=None, plot_tangents=False):
+        self.body.plot(plot, plot_tangents)
         self.body.plot_curvature(plot)
 
     def to_json(self):
@@ -1051,7 +1031,6 @@ class Viola(object):
     def from_json(cls,json_str):
         """Cheap way to restore viol definition in a public, language independent, manner."""
         return jsonpickle.decode(json_str)
-
 
 def path_slice(path, T0=0.0, T1=1.0):
     """Return a new path snippet from T0 (start) to T1 (end)."""
@@ -1270,7 +1249,7 @@ def bez_extrema_t(b):
         if denom != 0:
             delta = a[1]**2 - (a[0] + a[1])*a[2] + a[2]**2 + (a[0] - a[1])*a[3]
             if delta >= 0:  # otherwise no local extrema
-                sqdelta = sqrt(delta)
+                sqdelta = math.sqrt(delta)
                 tau = a[0] - 2*a[1] + a[2]
                 r1 = (tau + sqdelta)/denom
                 r2 = (tau - sqdelta)/denom
