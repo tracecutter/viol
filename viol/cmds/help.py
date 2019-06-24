@@ -1,45 +1,41 @@
 # -*- coding: utf-8 -*-
 """
-    viol.commands.help
-    ~~~~~~~~~~~~~~~~~~
+    viol.cmds.help
+    ~~~~~~~~~~~~~~
 
-    viol help subcommand.
+    A help command as alternative to --help option.
 
-    :copyright: Copyright (c) 2018 Bit Harmony Ltd. All rights reserved. See AUTHORS.
+    :copyright: Copyright (c) 2019 Bit Harmony Ltd. All rights reserved. See AUTHORS.
     :license: PROPRIETARY, see LICENSE for details.
 """
 
-from viol.utils.cli     import Command
-from viol.exceptions    import CommandError
-from viol.errno         import (SUCCESS)
+from __future__ import absolute_import
+
+import logging
+import click
+from viol.lib.util_str import str_get_similar
+
+logger = logging.getLogger(__name__)
 
 
-class HelpCommand(Command):
-    """Show help for commands"""
-    name = 'help'
-    usage = """
-      %prog <command>"""
-    summary = 'Show help for commands.'
+@click.command()
+@click.argument('subcmd', default=None, required=False, nargs=1)
+@click.pass_context
+def help(ctx, subcmd, **kw):
+    """Show help for commands.
 
-    def run(self, options, args):
-        from viol.commands import commands, get_similar_commands
-
-        try:
-            # 'viol help' with no args is handled by viol.__init__.parseopt()
-            cmd_name = args[0]  # the command we need help for
-        except IndexError:
-            return SUCCESS
-
-        if cmd_name not in commands:
-            guess = get_similar_commands(cmd_name)
-
-            msg = ['unknown command "%s"' % cmd_name]
+    This command provides an alternative to --help option to provide usage information.
+    """
+    if subcmd is not None:
+        if subcmd in ctx.parent.command.commands:
+            help_msg = ctx.parent.command.commands[subcmd].get_help(ctx)
+            click.echo(help_msg.replace('viol help', 'viol ' + subcmd))
+        else:
+            guess = str_get_similar(ctx.parent.command.commands, subcmd)
             if guess:
-                msg.append('maybe you meant "%s"' % guess)
-
-            raise CommandError(' - '.join(msg))
-
-        command = commands[cmd_name]()
-        command.parser.print_help()
-
-        return SUCCESS
+                click.secho('ERROR: unknown viol subcommand "{}" - maybe you meant "{}"'.format(subcmd, guess),
+                            fg='red')
+            else:
+                click.secho('ERROR: unknown viol subcommand "{}".'.format(subcmd), fg='red')
+    else:
+        click.echo(ctx.parent.get_help())

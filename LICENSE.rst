@@ -1,4 +1,4 @@
-Copyright (c) 2018 Bit Harmony Ltd. All rights reserved.
+Copyright (c) 2019 Bit Harmony Ltd. All rights reserved.
 
 This file contains trade secrets of Bit Harmony Limited. No part may be reproduced or transmitted in any form by any means or for any purpose without the express written permission of Bit Harmony Limited.
 

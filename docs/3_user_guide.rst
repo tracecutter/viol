@@ -3,15 +3,37 @@
 User Guide
 ==========
 
-.. contents::
+.. .. contents::
 
 Introduction
 ------------
 
-This is the introduction.
+.. graphviz:: viol.dot
 
-Commands
---------
+viol provides a command line interface to the Viol Design.
+
+viol may be used interactively, but often it often operates behind the scenes as part of
+a automated test script.  It can also be useful as part of a continuous integration build
+and test procedure.
+
+.. Tip:: To obtain help for each subcommand, use the following command ``viol help <subcommand>``
+
+.. _viol_general_options:
+
+Usage Examples
+--------------
+
+.. code-block:: console
+
+ viol <command> [options]
+
+viol example 1
+
+viol example 2
+
+viol example 3
+
+viol example 4
 
 .. _config_viol:
 
@@ -119,6 +141,49 @@ Examples:
 - ``VIOL_HOST=foo`` overrides a config file with ``[global] host = foo``
 - A command specific section in the config file ``[<command>] host = bar``
   overrides the option with same name in the ``[global]`` config file section
+
+.. _viol_logging:
+
+Logging
+-------
+
+Console logging
+^^^^^^^^^^^^^^^
+
+viol offers `-v, --verbose <--verbose>` and `-q, --quiet <--quiet>`
+to control the console log level.  Each option can be used multiple times and
+used together. One ``-v`` increases the verbosity by one, whereas one ``-q`` decreases it by
+one.
+
+The series of log levels, in order, are as follows::
+
+  VERBOSE_DEBUG, DEBUG, INFO, NOTIFY, WARN, ERROR, FATAL
+
+``NOTIFY`` is the default level.
+
+A few examples on how the parameters work to affect the level:
+
+* specifying nothing results in ``NOTIFY``
+* ``-v`` results in ``INFO``
+* ``-vv`` results in ``DEBUG``
+* ``-q`` results in ``WARN``
+* ``-vq`` results in ``NOTIFY``
+
+The most practical use case for users is either ``-v`` or ``-vv`` to see
+additional logging to help troubleshoot an issue.
+
+.. _`FileLogging`:
+
+File logging
+^^^^^^^^^^^^
+
+viol offers the `--log <--log>` option for specifying a file where a maximum
+verbosity log will be kept.  This option is empty by default. This log appends
+to previous logging.
+
+Like all viol options, ``--log``, can also be set as an environment
+variable, or placed into the viol config file.  See the :ref:`Configure VIOL <config_viol>`
+section.
 
 
 Command Completion

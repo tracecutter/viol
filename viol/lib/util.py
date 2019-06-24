@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 """
-    viol.utils.util
-    ~~~~~~~~~~~~~~~
+    viol.lib.util
+    ~~~~~~~~~~~~~
 
-    viol native OS utility call support.
+    viol basic utility functions.
 
-    :copyright: Copyright (c) 2018 Bit Harmony Ltd. All rights reserved. See AUTHORS.
+    :copyright: Copyright (c) 2019 Bit Harmony Ltd. All rights reserved. See AUTHORS.
     :license: PROPRIETARY, see LICENSE for details.
 """
 import sys
@@ -13,14 +13,19 @@ import os
 import re
 import fnmatch
 import subprocess
-from viol.exceptions     import SubprocessError
-from viol.utils.log      import logger
-from viol.utils.compat   import console_to_str
+import logging
+from six.moves import shlex_quote
+from viol.exceptions import SubprocessError
+from viol.lib.compat import console_to_str
 
 __all__ = ['display_path', 'backup_dir', 'normalize_name', 'format_size',
            'make_path_relative', 'pretty_path', 'normalize_path', 'split_leading_dir',
            'has_leading_dir', 'get_prog', 'call_subprocess', 'find_file', 'find_file_list',
            'find_dir_list', 'is_dirname', 'is_glob', 'ffs_lsb', 'ffs_msb']
+
+# logger related
+logger = logging.getLogger(__name__)
+LOG_DIVIDER = '----------------------------------------'
 
 # ignore a few problematic directories that trick the search for viol resources
 _search_excludes = ['Tests', 'tests', '.svn', '.git']
@@ -75,6 +80,7 @@ def ask(message, options):
                 response, ', '.join(options)))
         else:
             return response
+
 
 _normalize_re = re.compile(r'[^a-z]', re.I)
 
@@ -176,12 +182,11 @@ def is_glob(glob):
 def format_size(nbytes):
     if nbytes > 1000 * 1000:
         return '%.1fMB' % (nbytes / 1000.0 / 1000)
-    elif nbytes > 10 * 1000:
+    if nbytes > 10 * 1000:
         return '%ikB' % (nbytes / 1000)
-    elif nbytes > 1000:
+    if nbytes > 1000:
         return '%.1fkB' % (nbytes / 1000.0)
-    else:
-        return '%ibytes' % nbytes
+    return '%ibytes' % nbytes
 
 
 def split_leading_dir(path):
@@ -189,10 +194,9 @@ def split_leading_dir(path):
     path = path.lstrip('/').lstrip('\\')
     if '/' in path and (('\\' in path and path.find('/') < path.find('\\')) or ('\\' not in path)):
         return path.split('/', 1)
-    elif '\\' in path:
+    if '\\' in path:
         return path.split('\\', 1)
-    else:
-        return path, ''
+    return path, ''
 
 
 def has_leading_dir(paths):
@@ -263,82 +267,124 @@ def normalize_path(path):
     """
     if path is None:
         return None
-    else:
-        return os.path.normcase(os.path.realpath(os.path.expanduser(path)))
+    return os.path.normcase(os.path.realpath(os.path.expanduser(path)))
 
 
-def call_subprocess(cmd, show_stdout=True, log_stdout=False, log_progress=False,
-                    filter_stdout=None, cwd=None, raise_on_returncode=True,
-                    command_level=logger.DEBUG, command_desc=None, extra_environ=None):
-    if command_desc is None:
-        cmd_parts = []
-        for part in cmd:
-            if ' ' in part or '\n' in part or '"' in part or "'" in part:
-                part = '"%s"' % part.replace('"', '\\"')
-            cmd_parts.append(part)
-        command_desc = ' '.join(cmd_parts)
+def call_subprocess(cmd, show_stdout=False, cwd=None, on_returncode='raise',
+                    extra_ok_returncodes=None, command_desc=None,
+                    extra_environ=None, unset_environ=None, spinner=None):
+    """
+    Args:
+      show_stdout: if true, use INFO to log the subprocess's stderr and
+        stdout streams.  Otherwise, use DEBUG.  Defaults to False.
+      extra_ok_returncodes: an iterable of integer return codes that are
+        acceptable, in addition to 0. Defaults to None, which means [].
+      unset_environ: an iterable of environment variable names to unset
+        prior to calling subprocess.Popen().
+    """
+    if extra_ok_returncodes is None:
+        extra_ok_returncodes = []
+    if unset_environ is None:
+        unset_environ = []
+    # Most places in pip use show_stdout=False. What this means is--
+    #
+    # - We connect the child's output (combined stderr and stdout) to a
+    #   single pipe, which we read.
+    # - We log this output to stderr at DEBUG level as it is received.
+    # - If DEBUG logging isn't enabled (e.g. if --verbose logging wasn't
+    #   requested), then we show a spinner so the user can still see the
+    #   subprocess is in progress.
+    # - If the subprocess exits with an error, we log the output to stderr
+    #   at ERROR level if it hasn't already been displayed to the console
+    #   (e.g. if --verbose logging wasn't enabled).  This way we don't log
+    #   the output to the console twice.
+    #
+    # If show_stdout=True, then the above is still done, but with DEBUG
+    # replaced by INFO.
     if show_stdout:
-        stdout = None
+        # Then log the subprocess output at INFO level.
+        log_subprocess = logger.info
+        used_level = logging.INFO
     else:
-        stdout = subprocess.PIPE
-    logger.log(command_level, "Running command %s" % command_desc)
+        # Then log the subprocess output using DEBUG.  This also ensures
+        # it will be logged to the log file (aka user_log), if enabled.
+        log_subprocess = logger.debug
+        used_level = logging.DEBUG
+
+    # Whether the subprocess will be visible in the console.
+    showing_subprocess = logger.getEffectiveLevel() <= used_level
+
+    # Only use the spinner if we're not showing the subprocess output
+    # and we have a spinner.
+    use_spinner = not showing_subprocess and spinner is not None
+
+    if command_desc is None:
+        command_desc = ' '.join(shlex_quote(elem) for elem in cmd)
+
+    log_subprocess("Running command %s", command_desc)
     env = os.environ.copy()
     if extra_environ:
         env.update(extra_environ)
+    for name in unset_environ:
+        env.pop(name, None)
     try:
         proc = subprocess.Popen(
-            cmd, stderr=subprocess.STDOUT, stdin=None, stdout=stdout,
-            cwd=cwd, env=env)
-    except Exception:
-        e = sys.exc_info()[1]
-        logger.fatal(
-            "Error %s while executing command %s" % (e, command_desc))
+            cmd, stderr=subprocess.STDOUT, stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE, cwd=cwd, env=env,
+        )
+        proc.stdin.close()
+    except Exception as exc:
+        logger.critical(
+            "Error %s while executing command %s", exc, command_desc,
+        )
         raise
     all_output = []
+    while True:
+        line = console_to_str(proc.stdout.readline())
+        if not line:
+            break
+        line = line.rstrip()
+        all_output.append(line + '\n')
 
-    # if stdout is available via a pipe, it's time to drain it
-    if stdout is not None:
-        stdout = proc.stdout
-        while True:
-            line = console_to_str(stdout.readline())
-            if not line:
-                break
-            line = line.rstrip()
-            if filter_stdout:
-                line = filter_stdout(line)
-            if (line is not None) and (line != ''):
-                all_output.append(line + '\n')
-            if log_stdout:
-                logger.info(line)
-            if log_progress:
-                logger.show_progress()
-    else:
-        returned_stdout, returned_stderr = proc.communicate()
-        all_output = []
-        for i, line in enumerate(returned_stdout):
-            if filter_stdout:
-                line = filter_stdout(line)
-                if (line is not None) and (line != ''):
-                    all_output.append(line)
-            else:
-                all_output.append(line)
-
-        if not all_output:
-            all_output = ['']
-
-    proc.wait()
-    if proc.returncode:
-        if raise_on_returncode:
-            if all_output:
-                logger.notify('Complete output from command %s:' % command_desc)
-                logger.notify('\n'.join(all_output) +
-                              '\n----------------------------------------')
-            raise SubprocessError(
-                "Command %s failed with error code %s in %s"
-                % (command_desc, proc.returncode, cwd))
+        # Show the line immediately.
+        log_subprocess(line)
+        # Update the spinner.
+        if use_spinner:
+            spinner.spin()
+    try:
+        proc.wait()
+    finally:
+        if proc.stdout:
+            proc.stdout.close()
+    proc_had_error = (
+        proc.returncode and proc.returncode not in extra_ok_returncodes
+    )
+    if use_spinner:
+        if proc_had_error:
+            spinner.finish("error")
         else:
-            logger.warn(
-                "Command %s had error code %s in %s"
+            spinner.finish("done")
+    if proc_had_error:
+        if on_returncode == 'raise':
+            if not showing_subprocess:
+                # Then the subprocess streams haven't been logged to the
+                # console yet.
+                logger.error(
+                    'Complete output from command %s:', command_desc,
+                )
+                # The all_output value already ends in a newline.
+                logger.error(''.join(all_output) + LOG_DIVIDER)
+            raise SubprocessError(
+                'Command "%s" failed with error code %s in %s'
                 % (command_desc, proc.returncode, cwd))
-
-    return all_output
+        elif on_returncode == 'warn':
+            logger.warning(
+                'Command "%s" had error code %s in %s',
+                command_desc, proc.returncode, cwd,
+            )
+        elif on_returncode == 'ignore':
+            pass
+        else:
+            raise ValueError('Invalid value: on_returncode=%s' %
+                             repr(on_returncode))
+    return ''.join(all_output)

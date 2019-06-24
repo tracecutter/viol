@@ -1,4 +1,4 @@
 Authors
 +++++++
 
-* Development Lead - John Fogelin <john@bitharmony.com>
+* Development Lead - John Fogelin <john.fogelin@yellowlineparking.com>

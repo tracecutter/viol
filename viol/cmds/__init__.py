@@ -1,419 +1,96 @@
-"""Treadmill commaand line helpers.
+# -*- coding: utf-8 -*-
 """
+    viol.cmds
+    ~~~~~~~~~
 
+    viol subcommands
+
+    :copyright: Copyright (c) 2019 Bit Harmony Ltd. All rights reserved. See AUTHORS.
+    :license: PROPRIETARY, see LICENSE for details.
+"""
 from __future__ import absolute_import
 from __future__ import division
-from __future__ import print_function
-from __future__ import unicode_literals
 
-# Disable too many lines in module warning.
-#
-# pylint: disable=C0302
-
-import codecs
-import copy
-import functools
-import io
 import logging
-import os
-import pkgutil
-import re
-import sys
-import tempfile
-import traceback
-
+import logging.config
 import click
-import pkg_resources
-
-import six
-from six.moves import configparser
-
-import treadmill
-
-from treadmill import utils
-from treadmill import context
-from treadmill import plugin_manager
-from treadmill import subproc
-
-
-EXIT_CODE_DEFAULT = 1
-
-# Disable unicode_literals click warning.
-click.disable_unicode_literals_warning = True
-
-
-def init_logger(name):
-    """Initialize logger.
-    """
-    try:
-        # logging configuration files in json format
-        conf = treadmill.logging.load_logging_conf(name)
-        logging.config.dictConfig(conf)
-    except configparser.Error:
-        with tempfile.NamedTemporaryFile(delete=False, mode='w') as f:
-            traceback.print_exc(file=f)
-            click.echo('Error parsing log conf: {name}'.format(name=name),
-                       err=True)
-
-
-def init_profile():
-    """Initailize profile.
-    """
-    if 'TREADMILL_ALIASES_PATH' in os.environ:
-        subproc.load_aliases(os.environ['TREADMILL_ALIASES_PATH'])
-    else:
-        packages = ['aliases']
-        profile = context.GLOBAL.get_profile_name()
-        if profile:
-            packages.append('aliases.{}'.format(profile))
-        subproc.load_packages(packages)
-
-
-def make_commands(section, **click_args):
-    """Make a Click multicommand from all submodules of the module."""
-
-    class MCommand(click.MultiCommand):
-        """Treadmill CLI driver."""
-
-        def __init__(self, *args, **kwargs):
-            if kwargs and click_args:
-                kwargs.update(click_args)
-
-            click.MultiCommand.__init__(self, *args, **kwargs)
-
-        def list_commands(self, ctx):
-            """Return list of commands in section."""
-            return sorted(plugin_manager.names(section))
-
-        def get_command(self, ctx, cmd_name):
-            """Return dymanically constructed command."""
-            try:
-                return plugin_manager.load(section, cmd_name).init()
-            except ImportError as import_err:
-                print(
-                    'dependency error: {}:{} - {}'.format(
-                        section, cmd_name, str(import_err)
-                    ),
-                    file=sys.stderr
-                )
-            except KeyError:
-                raise click.UsageError('Invalid command: %s' % cmd_name)
-
-    return MCommand
-
-
-def _read_password(value):
-    """Heuristic to either read the password from file or return the value."""
-    if os.path.exists(value):
-        with io.open(value) as f:
-            return f.read().strip()
-    else:
-        return value
-
-
-# pylint: disable=too-many-branches
-def handle_context_opt(ctx, param, value):
-    """Handle eager CLI options to configure context.
-
-    The eager options are evaluated directly during parsing phase, and can
-    affect other options parsing (like required/not).
-
-    The only side effect of consuming these options are setting attributes
-    of the global context.
-    """
-    # pylint: disable=too-many-branches
-
-    def parse_dns_server(dns_server):
-        """Parse dns server string"""
-        if ':' in dns_server:
-            hosts_port = dns_server.split(':')
-            return (hosts_port[0].split(','), int(hosts_port[1]))
-        else:
-            return (dns_server.split(','), None)
-
-    if not value or ctx.resilient_parsing:
-        return None
-
-    if value == '-':
-        return None
-
-    opt = param.name
-    if opt == 'cell':
-        cell_parts = value.split('.')
-        context.GLOBAL.cell = cell_parts.pop(0)
-        if cell_parts:
-            context.GLOBAL.dns_domain = '.'.join(cell_parts)
-    elif opt == 'dns_domain':
-        context.GLOBAL.dns_domain = value
-    elif opt == 'dns_server':
-        context.GLOBAL.dns_server = parse_dns_server(value)
-    elif opt == 'ldap':
-        context.GLOBAL.ldap.url = value
-    elif opt == 'ldap_master':
-        context.GLOBAL.ldap.write_url = value
-    elif opt == 'ldap_suffix':
-        context.GLOBAL.ldap_suffix = value
-    elif opt == 'ldap_user':
-        context.GLOBAL.ldap.user = value
-    elif opt == 'ldap_pwd':
-        context.GLOBAL.ldap.password = _read_password(value)
-    elif opt == 'zookeeper':
-        context.GLOBAL.zk.url = value
-    elif opt == 'profile':
-        context.GLOBAL.set_profile_name(value)
-        init_profile()
-    else:
-        raise click.UsageError('Invalid option: %s' % param.name)
-
-    return value
-
-
-class _CommaSepList(click.ParamType):
-    """Custom input type for comma separated values."""
-    name = 'list'
-
-    def convert(self, value, param, ctx):
-        """Convert command line argument to list."""
-        if value is None:
-            return []
-
-        try:
-            return value.split(',')
-        except AttributeError:
-            self.fail('%s is not a comma separated list' % value, param, ctx)
-
-
-LIST = _CommaSepList()
-
-
-class Enums(click.ParamType):
-    """Custom input type for comma separated enums."""
-    name = 'enumlist'
-
-    def __init__(self, choices):
-        self.choices = choices
-
-    def get_metavar(self, param):
-        return '[%s]' % '|'.join(self.choices)
-
-    def get_missing_message(self, param):
-        return 'Choose from %s.' % ', '.join(self.choices)
-
-    def convert(self, value, param, ctx):
-        """Convert command line argument to list."""
-        if value is None:
-            return []
-
-        choices = []
-        try:
-            for val in value.split(','):
-                if val in self.choices:
-                    choices.append(val)
-                else:
-                    self.fail(
-                        'invalid choice: %s. (choose from %s)' %
-                        (val, ', '.join(self.choices)),
-                        param, ctx
-                    )
-            return choices
-
-        except AttributeError:
-            self.fail('%s is not a comma separated list' % value, param, ctx)
-
-
-class _KeyValuePairs(click.ParamType):
-    """Custom input type for key/value pairs."""
-    name = 'key/value pairs'
-
-    def convert(self, value, param, ctx):
-        """Convert command line argument to list."""
-        if value is None:
-            return {}
-
-        items = re.split(r'([\w\.\-]+=)', value)
-        items.pop(0)
-
-        keys = [key.rstrip('=') for key in items[0::2]]
-        values = [value.rstrip(',') for value in items[1::2]]
-
-        return dict(zip(keys, values))
-
-
-DICT = _KeyValuePairs()
-
-
-def validate_memory(_ctx, _param, value):
-    """Validate memory string."""
-    if value is None:
-        return None
-
-    if not re.search(r'\d+[KkMmGg]$', value):
-        raise click.BadParameter('Memory format: nnn[K|M|G].')
-    return value
-
-
-def validate_disk(_ctx, _param, value):
-    """Validate disk string."""
-    if value is None:
-        return None
-    if not re.search(r'\d+[KkMmGg]$', value):
-        raise click.BadParameter('Disk format: nnn[K|M|Gyy].')
-    return value
-
-
-def validate_cpu(_ctx, _param, value):
-    """Validate cpu string."""
-    if value is None:
-        return None
-    if not re.search(r'\d+%$', value):
-        raise click.BadParameter('CPU format: nnn%.')
-    return value
-
-
-def validate_cpuset_cores(_ctx, _param, value):
-    """Validate cpuset cores string."""
-    if value is None:
-        return None
-    if not re.search(r'\d+\-?\d*(,\d+\-?\d*)*$', value):
-        raise click.BadParameter('CPU cores format: nnn[,nnn-[nnn]].')
-    return value
-
-
-def validate_reboot_schedule(_ctx, _param, value):
-    """Validate reboot schedule specification."""
-    if value is None:
-        return None
-    try:
-        utils.reboot_schedule(value)
-    except ValueError:
-        raise click.BadParameter('Invalid reboot schedule. (eg.: "sat,sun")')
-    return value
-
-
-def combine(list_of_values, sep=','):
-    """Split and sum list of sep string into one list.
-    """
-    combined = sum(
-        [str(values).split(sep) for values in list(list_of_values)],
-        []
-    )
-
-    if combined == ['-']:
-        combined = None
-
-    return combined
-
-
-def out(string, *args):
-    """Print to stdout."""
-    if args:
-        string = string % args
-
-    click.echo(string)
-
-
-def handle_exceptions(exclist):
-    """Decorator that will handle exceptions and output friendly messages."""
-
-    def wrap(f):
-        """Returns decorator that wraps/handles exceptions."""
-        exclist_copy = copy.copy(exclist)
-
-        @functools.wraps(f)
-        def wrapped_f(*args, **kwargs):
-            """Wrapped function."""
-            if not exclist_copy:
-                f(*args, **kwargs)
+from viol import __version__
+from viol.exceptions import CustomExceptionHandler, click_exception_handler
+from viol.lib.log import setup_logging
+from viol.cmds.scan import scan
+from viol.cmds.help import help
+from viol.cmds.completion import completion
+
+logger = logging.getLogger(__name__)
+
+# pylint: disable=E1103
+
+
+class ViolCtx(object):
+
+    def __init__(self):
+        self.config = {}
+        self.verbosity = 0
+
+    def set_config(self, key, value):
+        self.config[key] = value
+        logger.debug('config[%s] = %s' % (key, value))
+
+    def __repr__(self):
+        # Generator to filter which properties to show.
+        # This example excludes properties prefixed with "_" and methods.
+        def filter_props(obj):
+            props = sorted(obj.__dict__.keys())
+            for prop in props:
+                if not callable(prop) and prop[0] != "_":
+                    yield (prop, getattr(obj, prop))
+            return
+
+        prop_tuples = filter_props(self)
+        result = "<" + self.__class__.__name__ + "("
+        for prop in prop_tuples:
+            result += prop[0].__str__() + "="
+            # Stylize (if desired) the output based on the type.
+            # This example shortens floating point values to three decimal places.
+            if isinstance(prop[1], float):
+                result += "{:.3f}, ".format(prop[1])
             else:
-                exc, handler = exclist_copy.pop(0)
+                result += prop[1].__repr__() + ", "
 
-                try:
-                    wrapped_f(*args, **kwargs)
-                except exc as err:
-                    if isinstance(handler, six.string_types):
-                        click.echo(handler, err=True)
-                    elif handler is None:
-                        click.echo(str(err), err=True)
-                    else:
-                        click.echo(handler(err), err=True)
-
-                    sys.exit(EXIT_CODE_DEFAULT)
-
-        @functools.wraps(f)
-        def _handle_any(*args, **kwargs):
-            """Default exception handler."""
-            try:
-                return wrapped_f(*args, **kwargs)
-
-            except click.UsageError as usage_err:
-                click.echo('Usage error: %s' % str(usage_err), err=True)
-                sys.exit(EXIT_CODE_DEFAULT)
-
-            except Exception as unhandled:  # pylint: disable=W0703
-
-                with tempfile.NamedTemporaryFile(delete=False, mode='w') as f:
-                    traceback.print_exc(file=f)
-                    click.echo('Error: %s [ %s ]' % (unhandled, f.name),
-                               err=True)
-
-                sys.exit(EXIT_CODE_DEFAULT)
-
-        return _handle_any
-
-    return wrap
+        result = result[:-2]
+        result += ")>"
+        return result
 
 
-OUTPUT_FORMAT = None
+pass_viol_ctx = click.make_pass_decorator(ViolCtx)
 
 
-def make_formatter(pretty_formatter):
-    """Makes a formatter."""
-
-    def _format(item, how=None):
-        """Formats the object given global format setting."""
-        if OUTPUT_FORMAT is None:
-            how = pretty_formatter
-        else:
-            how = OUTPUT_FORMAT
-
-        try:
-            fmt = plugin_manager.load('treadmill.formatters', how)
-            return fmt.format(item)
-        except KeyError:
-            return str(item)
-
-    return _format
-
-
-def bad_exit(string, *args):
-    """System exit non-zero with a string to sys.stderr.
-
-    The printing takes care of the newline"""
-    if args:
-        string = string % args
-
-    click.echo(string, err=True)
-    sys.exit(-1)
+@click.group(context_settings=dict(max_content_width=120),
+             cls=CustomExceptionHandler(click.Group, handler=click_exception_handler,
+                                        ignore_args=['--log']))
+@click.version_option(__version__, '--version', '-V')
+@click.option('--verbose', '-v', count=True,
+              help='Give more output. Increase verbosity: option is additive up to 3 times.')
+@click.option('--quiet', '-q', count=True,
+              help='Give less output. Decrease verbosity: option is additive up to 3 times.' +
+              ' (WARNING, ERROR, CRITICAL)')
+@click.option('--log', 'logfile', default=None, type=click.Path(),
+              help='Path to a verbose appending log.')
+@click.option('--color/--no-color', default=True,
+              help='Enable/Suppress colored output.')
+@click.pass_context
+def viol_main(ctx, verbose, quiet, logfile, color):
+    '''viol is a command line tool to administer the Viol Design.'''
+    # Create a viol_ctx object and store it in the click context object.
+    ctx.obj = ViolCtx()
+    ctx.obj.verbosity = verbose - quiet
+    # Setup logging to console and append to a user_log_file if selected
+    setup_logging(verbosity=ctx.obj.verbosity, no_color=not color, user_log_file=logfile)
+    pass
 
 
-def echo_colour(colour, string, *args):
-    """click.echo colour with support for placeholders, e.g. %s"""
-    if args:
-        string = string % args
-
-    click.echo(click.style(string, fg=colour))
-
-
-def echo_green(string, *args):
-    """click.echo green with support for placeholders, e.g. %s"""
-    echo_colour('green', string, *args)
-
-
-def echo_yellow(string, *args):
-    """click.echo yellow with support for placeholders, e.g. %s"""
-    echo_colour('yellow', string, *args)
-
-
-def echo_red(string, *args):
-    """click.echo yellow with support for placeholders, e.g. %s"""
-    echo_colour('red', string, *args)
+viol_cmds = [scan, completion, help]
+# now we add all subcmds (and subgroups)
+for cmd in viol_cmds:
+    logger.debug('Adding {}'.format(cmd))
+    viol_main.add_command(cmd)

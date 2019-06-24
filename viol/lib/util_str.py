@@ -1,23 +1,63 @@
 # -*- coding: utf-8 -*-
 """
-    viol.utils.util_str
-    ~~~~~~~~~~~~~~~~~~~
+    viol.lib.util_str
+    ~~~~~~~~~~~~~~~~~
 
     String manipulation utility calls.
 
-    :copyright: Copyright (c) 2018 Bit Harmony Ltd. All rights reserved. See AUTHORS.
+    :copyright: Copyright (c) 2019 Bit Harmony Ltd. All rights reserved. See AUTHORS.
     :license: PROPRIETARY, see LICENSE for details.
 """
 import string
 import re
 
-from HTMLParser import HTMLParser
-
-__all__ = ['str_to_ascii', 'str_to_int', 'str_to_bool', 'pretty_int']
+__all__ = ['str_instance', 'str_get_similar', 'str_to_ascii', 'str_to_int', 'str_to_bool', 'pretty_int']
 
 # regular expresssion to process expressions and integers into normalized form
 _dec_ul_re  = re.compile(r'([0123456789]+)[ULul]')
 _hex_ul_re  = re.compile(r'(0[xX][0123456789abcdefABCDEF]+)[ULul]')
+
+
+def str_instance(instance):
+    if instance is None:
+        return '<None>'
+
+    # Generator to filter which properties to show.
+    def filter_props(obj):
+        props = sorted(obj.__dict__.keys())
+        for prop in props:
+            if not callable(prop):
+                yield (prop, getattr(obj, prop))
+        return
+
+    prop_tuples = filter_props(instance)
+    result = "<" + instance.__class__.__name__ + "("
+    for prop in prop_tuples:
+        result += prop[0].__str__() + "="
+        # Stylize (if desired) the output based on the type.
+        # This example shortens floating point values to three decimal places.
+        if isinstance(prop[1], float):
+            result += "{:.3f}, ".format(prop[1])
+        else:
+            result += prop[1].__repr__() + ", "
+
+    result = result[:-2]
+    result += ")>"
+    return result
+
+
+def str_get_similar(str_dict, name):
+    """String to auto-correct."""
+    from difflib import get_close_matches
+
+    close_strs = get_close_matches(name, str_dict.keys())
+
+    if close_strs:
+        guess = close_strs[0]
+    else:
+        guess = False
+
+    return guess
 
 
 def str_to_ascii(text):
@@ -67,7 +107,7 @@ def str_to_int(val):
 
     try:
         return int(val, 16)         # try base 16 without the [UuLl]
-    except:
+    except (TypeError, ValueError):
         raise ValueError ("not an integer %r" % (val))
 
 

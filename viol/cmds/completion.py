@@ -1,73 +1,35 @@
 # -*- coding: utf-8 -*-
 """
-    viol.commands.completion
-    ~~~~~~~~~~~~~~~~~~~~~~~~
+    viol.cmds.completion
+    ~~~~~~~~~~~~~~~~~~~~
 
-    viol autocompletion support.  Output the bash gist to add to .bashrc for autocompletion
-    of viol subcommands and flags.
+    Output script to append to .bashrc or .zshrc in order to enable autocompletion from the shell.
 
-    :copyright: Copyright (c) 2018 Bit Harmony Ltd. All rights reserved. See AUTHORS.
+    :copyright: Copyright (c) 2019 Bit Harmony Ltd. All rights reserved. See AUTHORS.
     :license: PROPRIETARY, see LICENSE for details.
 """
-import sys
 
-from viol.utils.cli import Command
+from __future__ import absolute_import
 
-BASE_COMPLETION = """
-# viol %(shell)s completion start%(script)s# viol %(shell)s completion end
-"""
+import logging
+import click
 
-COMPLETION_SCRIPTS = {
-    'bash': """
-_viol_completion()
-{
-    COMPREPLY=( $( COMP_WORDS="${COMP_WORDS[*]}" \\
-                   COMP_CWORD=$COMP_CWORD \\
-                   VIOL_AUTO_COMPLETE=1 $1 ) )
-}
-complete -o default -F _viol_completion viol
-""", 'zsh': """
-function _viol_completion {
-  local words cword
-  read -Ac words
-  read -cn cword
-  reply=( $( COMP_WORDS="$words[*]" \\
-             COMP_CWORD=$(( cword-1 )) \\
-             VIOL_AUTO_COMPLETE=1 $words[1] ) )
-}
-compctl -K _viol_completion viol
-"""}
+logger = logging.getLogger(__name__)
 
 
-class CompletionCommand(Command):
-    """A helper command to be used for command completion."""
-    name    = 'completion'
-    summary = 'A helper command to be used for command completion'
-    hidden  = True
+@click.command()
+@click.option('--shell-type', type=click.Choice(['bash', 'zsh']), default='bash',
+              help='A helper command to be used for command completion.')
+def completion(shell_type):
+    """A helper command to be used for command completion.
 
-    logger_level = 0    # Reduce verbosity to WARN
-
-    def __init__(self, *args, **kw):
-        super(CompletionCommand, self).__init__(*args, **kw)
-        self.parser.add_option(
-            '--bash', '-b',
-            action='store_const',
-            const='bash',
-            dest='shell',
-            help='Emit completion code for bash')
-        self.parser.add_option(
-            '--zsh', '-z',
-            action='store_const',
-            const='zsh',
-            dest='shell',
-            help='Emit completion code for zsh')
-
-    def run(self, options, args):
-        """Prints the completion code of the given shell"""
-        shells = COMPLETION_SCRIPTS.keys()
-        shell_options = ['--' + shell for shell in sorted(shells)]
-        if options.shell in shells:
-            script = COMPLETION_SCRIPTS.get(options.shell, '')
-            print(BASE_COMPLETION % {'script': script, 'shell': options.shell})
-        else:
-            sys.stderr.write('ERROR: You must pass %s\n' % ' or '.join(shell_options))
+    Append the output of this command to your shell .rc file.  When executed,
+    striking tab during command line interaction will autocomplete and/or suggest
+    possible input.  Command options are enumerated if tab is struck after the
+    character '-' is input.
+    """
+    logger.debug('Outputting shell rc script for {}.'.format(shell_type))
+    if shell_type == 'bash':
+        logger.info('eval "$(_VIOL_COMPLETE=source viol)"')
+    else:
+        logger.info('eval "$(_VIOL_COMPLETE=source_zsh viol)"')
