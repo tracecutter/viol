@@ -6,7 +6,7 @@ test_violcli
 
 Tests for viol command line interface.
 
-:copyright: Copyright (c) 2019 Bit Harmony Ltd. All rights reserved. See AUTHORS.
+:copyright: Copyright (c) 2021 Bit Harmony Ltd. All rights reserved. See AUTHORS.
 :license: PROPRIETARY, see LICENSE for details.
 """
 

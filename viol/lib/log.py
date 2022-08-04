@@ -5,10 +5,10 @@
 
     Logging facility based on pip.
 
-    :copyright: Copyright (c) 2019 Bit Harmony Ltd. All rights reserved. See AUTHORS.
+    :copyright: Copyright (c) 2021 Bit Harmony Ltd. All rights reserved. See AUTHORS.
     :license: PROPRIETARY, see LICENSE for details.
 """
-from __future__ import absolute_import
+
 
 import contextlib
 import errno
@@ -110,7 +110,7 @@ class IndentingFormatter(logging.Formatter):
             with their record's timestamp.
         """
         self.add_timestamp = kwargs.pop("add_timestamp", False)
-        super(IndentingFormatter, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     def get_message_start(self, formatted, levelno):
         """
@@ -121,15 +121,17 @@ class IndentingFormatter(logging.Formatter):
             return ''
         if levelno < logging.ERROR:
             return 'WARNING: '
+        if levelno < logging.CRITICAL:
+            return 'ERROR: '
 
-        return 'ERROR: '
+        return 'CRITICAL: '
 
     def format(self, record):
         """
         Calls the standard formatter, but will indent all of the log messages
         by our current indentation level.
         """
-        formatted = super(IndentingFormatter, self).format(record)
+        formatted = super().format(record)
         message_start = self.get_message_start(formatted, record.levelno)
         formatted = message_start + formatted
 
@@ -222,7 +224,7 @@ class ColorizedStreamHandler(logging.StreamHandler):
                 _is_broken_pipe_error(exc_class, exc)):
             raise BrokenStdoutLoggingError()
 
-        return super(ColorizedStreamHandler, self).handleError(record)
+        return super().handleError(record)
 
 
 class BetterRotatingFileHandler(logging.handlers.RotatingFileHandler):
@@ -254,7 +256,7 @@ class ExcludeLoggerFilter(Filter):
     def filter(self, record):
         # The base Filter class allows only records from a logger (or its
         # children).
-        return not super(ExcludeLoggerFilter, self).filter(record)
+        return not super().filter(record)
 
 
 def setup_logging(verbosity=0, no_color=False, user_log_file=None):

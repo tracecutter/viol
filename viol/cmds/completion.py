@@ -5,11 +5,10 @@
 
     Output script to append to .bashrc or .zshrc in order to enable autocompletion from the shell.
 
-    :copyright: Copyright (c) 2019 Bit Harmony Ltd. All rights reserved. See AUTHORS.
+    :copyright: Copyright (c) 2021 Bit Harmony Ltd. All rights reserved. See AUTHORS.
     :license: PROPRIETARY, see LICENSE for details.
 """
 
-from __future__ import absolute_import
 
 import logging
 import click
@@ -29,7 +28,8 @@ def completion(shell_type):
     character '-' is input.
     """
     logger.debug('Outputting shell rc script for {}.'.format(shell_type))
+
     if shell_type == 'bash':
-        logger.info('eval "$(_VIOL_COMPLETE=source viol)"')
+        logger.info('eval "$(_VIOL_COMPLETE=bash_source viol)"')
     else:
-        logger.info('eval "$(_VIOL_COMPLETE=source_zsh viol)"')
+        logger.info('eval "$(_VIOL_COMPLETE=zsh_source viol)"')

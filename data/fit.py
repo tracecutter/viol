@@ -27,7 +27,7 @@ tn = np.linspace(0, 2.1, 200)
 a0 = 40
 
 popt, pcov = optimize.curve_fit(f, t, y, p0=a0)
-print popt
+print(popt)
 
 plt.plot(x, y, 'or')
 plt.plot(tn, f(tn, popt))

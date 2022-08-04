@@ -61,7 +61,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = 'viol'
-copyright = '2019, Bit Harmony Ltd.'
+copyright = '2021, Bit Harmony Ltd.'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -259,8 +259,8 @@ latex_elements = {
 # [howto/manual]).
 latex_documents = [
     ('index', 'viol.tex',
-     ur'Viol Design',
-     ur'Bit Harmony Ltd',
+     r'Viol Design',
+     r'Bit Harmony Ltd',
      'manual'),
 ]
 
@@ -291,7 +291,7 @@ latex_show_urls = 'inline'
 # (source start file, name, description, authors, manual section).
 man_pages = [
     ('index', 'viol',
-     u'Viol Design Documentation',
+     'Viol Design Documentation',
      ['viol Quality Management System'], 1)
 ]
 
@@ -306,7 +306,7 @@ man_pages = [
 #  dir menu entry, description, category)
 texinfo_documents = [
     ('index', 'viol',
-     u'Viol Design Documentation',
+     'Viol Design Documentation',
      'viol',
      'viol quality management system.',
      'Recommendation'),
@@ -341,7 +341,7 @@ texinfo_documents = [
 # regardless of the global pdf_compressed setting.
 
 pdf_documents = [
-    ('index', u'viol', u'Viol Design Documentation', u'viol Quality Management System'),
+    ('index', 'viol', 'Viol Design Documentation', 'viol Quality Management System'),
 ]
 
 # A comma-separated list of custom stylesheets. Example:

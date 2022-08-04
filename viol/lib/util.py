@@ -5,7 +5,7 @@
 
     viol basic utility functions.
 
-    :copyright: Copyright (c) 2019 Bit Harmony Ltd. All rights reserved. See AUTHORS.
+    :copyright: Copyright (c) 2021 Bit Harmony Ltd. All rights reserved. See AUTHORS.
     :license: PROPRIETARY, see LICENSE for details.
 """
 import sys
@@ -73,11 +73,11 @@ def backup_dir(bu_dir, ext='.bak'):
 def ask(message, options):
     """Ask the message interactively, with the given possible responses"""
     while 1:
-        response = raw_input(message)
+        response = eval(input(message))
         response = response.strip().lower()
         if response not in options:
-            print('Your response (%r) was not one of the expected responses: %s' % (
-                response, ', '.join(options)))
+            print(('Your response (%r) was not one of the expected responses: %s' % (
+                response, ', '.join(options))))
         else:
             return response
 
@@ -207,7 +207,7 @@ def has_leading_dir(paths):
         prefix, rest = split_leading_dir(path)
         if not prefix:
             return False
-        elif common_prefix is None:
+        if common_prefix is None:
             common_prefix = prefix
         elif prefix != common_prefix:
             return False
@@ -328,15 +328,11 @@ def call_subprocess(cmd, show_stdout=False, cwd=None, on_returncode='raise',
     for name in unset_environ:
         env.pop(name, None)
     try:
-        proc = subprocess.Popen(
-            cmd, stderr=subprocess.STDOUT, stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE, cwd=cwd, env=env,
-        )
-        proc.stdin.close()
+        with subprocess.Popen(cmd, stderr=subprocess.STDOUT, stdin=subprocess.PIPE,
+                              stdout=subprocess.PIPE, cwd=cwd, env=env) as proc:
+            proc.stdin.close()
     except Exception as exc:
-        logger.critical(
-            "Error %s while executing command %s", exc, command_desc,
-        )
+        logger.critical("Error %s while executing command %s", exc, command_desc)
         raise
     all_output = []
     while True:
@@ -377,7 +373,7 @@ def call_subprocess(cmd, show_stdout=False, cwd=None, on_returncode='raise',
             raise SubprocessError(
                 'Command "%s" failed with error code %s in %s'
                 % (command_desc, proc.returncode, cwd))
-        elif on_returncode == 'warn':
+        if on_returncode == 'warn':
             logger.warning(
                 'Command "%s" had error code %s in %s',
                 command_desc, proc.returncode, cwd,

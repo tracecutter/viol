@@ -5,13 +5,13 @@
 
     The viol utility entry point for automatic python -m viol execution
 
-    :copyright: Copyright (c) 2019 Bit Harmony Ltd. All rights reserved. See AUTHORS.
+    :copyright: Copyright (c) 2021 Bit Harmony Ltd. All rights reserved. See AUTHORS.
     :license: PROPRIETARY, see LICENSE for details.
 """
 
 # pylint: disable=no-value-for-parameter
 
-from __future__ import absolute_import
+
 import sys
 from viol.cmds import viol_main
 

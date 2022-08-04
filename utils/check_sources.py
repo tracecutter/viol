@@ -7,10 +7,10 @@
     Make sure each Python file has a correct file header
     including copyright and license information.
 
-    :copyright: Copyright (c) 2019 Bit Harmony Ltd. All rights reserved. See AUTHORS.
+    :copyright: Copyright (c) 2021 Bit Harmony Ltd. All rights reserved. See AUTHORS.
     :license: PROPRIETARY, see LICENSE for details.
 """
-from __future__ import print_function
+
 
 import sys, os, re
 from six import StringIO

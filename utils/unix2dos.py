@@ -32,7 +32,7 @@ file is generated with shutil.copy(), but some corner cases regarding
 user/group and permissions could leave the backup file more readable that
 you'd prefer. You can always use the --nobackup option to prevent this.
 """
-from __future__ import print_function
+
 
 __version__ = "1"
 
@@ -130,7 +130,7 @@ def file_is_binary(filename):
     bytes_to_check = f.read(1024)
     f.close()
 
-    textchars = ''.join(map(chr, [7,8,9,10,12,13,27] + range(0x20, 0x100)))
+    textchars = ''.join(map(chr, [7,8,9,10,12,13,27] + list(range(0x20, 0x100))))
 
     # Remove the non-text chars from the bytes
     nontext = bytes_to_check.translate(None, textchars)
